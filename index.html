@@ -239,7 +239,7 @@
   #zen-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(2,3,10,0.55) 100%); }
   #zen-ui { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
   #zen-ui.show { opacity: 1; }
-  #zen-top { position: absolute; top: 0; left: 0; right: 0; padding: 16px 16px 40px; display: flex; justify-content: flex-end; gap: 8px; pointer-events: auto; background: linear-gradient(rgba(2,3,10,0.6), transparent); }
+  #zen-top { position: absolute; top: 0; left: 0; right: 0; padding: 16px 16px 40px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; pointer-events: auto; background: linear-gradient(rgba(2,3,10,0.6), transparent); }
   #zen-ui.show #zen-top, #zen-ui.show #zen-cap { pointer-events: auto; }
   #zen-top button { background: rgba(10,14,28,0.55); border: 1px solid rgba(255,255,255,0.18); color: #e8ecf7; font-size: 13px; padding: 8px 12px; border-radius: 20px; cursor: pointer; backdrop-filter: blur(8px); white-space: nowrap; font-family: var(--sans); }
   #zen-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 20px 26px; background: linear-gradient(transparent, rgba(2,3,10,0.75)); color: #e8ecf7; }
@@ -303,6 +303,7 @@
     <div id="zen-ui">
       <div id="zen-top">
         <button id="zen-pause">⏸ 멈춤</button>
+        <button id="zen-prev">⏮ 이전</button>
         <button id="zen-next">다음 ⏭</button>
         <button id="zen-snd">🔇 소리</button>
         <button id="zen-close">✕ 닫기</button>
@@ -4230,14 +4231,15 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       ], { duration: dur, easing: 'linear', fill: 'forwards' });
     } catch (e) {}
   }
-  async function zenShow(){
+  async function zenShow(dir){
     if (!zenActive) return;
-    zenPos = (zenPos + 1) % zenOrder.length;
+    dir = dir === -1 ? -1 : 1;
+    zenPos = (zenPos + dir + zenOrder.length) % zenOrder.length;
     const idx = zenOrder[zenPos];
     const im = await zenLoad(idx);
     if (!zenActive) return;
     if (!im){ // 불러오지 못한 사진은 건너뜀 (전부 실패하면 별빛 배경만)
-      zenTimer = setTimeout(zenShow, 400); zenFails++; if (zenFails > 6){ zenTimer = setTimeout(zenShow, 8000); }
+      zenTimer = setTimeout(() => zenShow(dir), 400); zenFails++; if (zenFails > 6){ zenTimer = setTimeout(() => zenShow(1), 8000); }
       return;
     }
     zenFails = 0;
@@ -4257,7 +4259,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('zen-n').textContent = ZEN_SRC[row[1]] + ' · CC BY 4.0';
     // 다음 사진 미리 불러오기
     zenLoad(zenOrder[(zenPos + 1) % zenOrder.length]);
-    if (!zenPaused) zenTimer = setTimeout(zenShow, ZEN_HOLD);
+    if (!zenPaused) zenTimer = setTimeout(() => zenShow(1), ZEN_HOLD);
   }
   let zenFails = 0;
 
@@ -4324,11 +4326,12 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   }
   document.getElementById('btn-zen').addEventListener('click', zenOpen);
   document.getElementById('zen-close').addEventListener('click', e => { e.stopPropagation(); zenClose(); });
-  document.getElementById('zen-next').addEventListener('click', e => { e.stopPropagation(); clearTimeout(zenTimer); zenShow(); zenFlashUI(); });
+  document.getElementById('zen-next').addEventListener('click', e => { e.stopPropagation(); clearTimeout(zenTimer); zenShow(1); zenFlashUI(); });
+  document.getElementById('zen-prev').addEventListener('click', e => { e.stopPropagation(); clearTimeout(zenTimer); zenShow(-1); zenFlashUI(); });
   document.getElementById('zen-pause').addEventListener('click', e => {
     e.stopPropagation(); zenPaused = !zenPaused;
     e.target.textContent = zenPaused ? '▶ 재생' : '⏸ 멈춤';
-    clearTimeout(zenTimer); if (!zenPaused) zenTimer = setTimeout(zenShow, 1500);
+    clearTimeout(zenTimer); if (!zenPaused) zenTimer = setTimeout(() => zenShow(1), 1500);
     zenFlashUI();
   });
   document.getElementById('zen-snd').addEventListener('click', e => {
@@ -4337,7 +4340,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   zenEl.addEventListener('click', () => { if (zenUI.classList.contains('show')) { zenUI.classList.remove('show'); } else { zenFlashUI(); } });
   window.addEventListener('keydown', e => { if (zenActive && e.key === 'Escape') zenClose(); });
   window.addEventListener('resize', () => { if (zenActive){ zenResize(); zenInitStars(); } });
-  document.addEventListener('visibilitychange', () => { if (zenActive && !document.hidden && !zenPaused){ clearTimeout(zenTimer); zenTimer = setTimeout(zenShow, 500); } });
+  document.addEventListener('visibilitychange', () => { if (zenActive && !document.hidden && !zenPaused){ clearTimeout(zenTimer); zenTimer = setTimeout(() => zenShow(1), 500); } });
 
   // ---------- 애니메이션 루프 ----------
   const clock = new THREE.Clock();

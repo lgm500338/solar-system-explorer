@@ -225,7 +225,35 @@
   #loading .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite ease-in-out; }
   @keyframes pulse { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
 
+
+  /* ===== 우주멍 ===== */
+  .hud-btn.zen { border-color: rgba(255,184,112,0.6); color: #ffd9a8; }
+  .hud-btn.zen:hover { border-color: #ffb870; }
+  #zen { position: fixed; inset: 0; z-index: 60; background: #02030a; display: none; overflow: hidden; touch-action: manipulation; }
+  #zen.open { display: block; }
+  #zen .zl { position: absolute; inset: 0; opacity: 0; transition: opacity 3s ease-in-out; will-change: opacity; }
+  #zen .zl.on { opacity: 1; }
+  #zen .zl img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; transform-origin: center; }
+  #zen .zl.fallback { background: radial-gradient(ellipse at 30% 40%, #1b2a55 0%, transparent 55%), radial-gradient(ellipse at 70% 65%, #3a1d4a 0%, transparent 55%), #02030a; }
+  #zen-stars { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
+  #zen-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(2,3,10,0.55) 100%); }
+  #zen-ui { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
+  #zen-ui.show { opacity: 1; }
+  #zen-top { position: absolute; top: 0; left: 0; right: 0; padding: 16px 16px 40px; display: flex; justify-content: flex-end; gap: 8px; pointer-events: auto; background: linear-gradient(rgba(2,3,10,0.6), transparent); }
+  #zen-ui.show #zen-top, #zen-ui.show #zen-cap { pointer-events: auto; }
+  #zen-top button { background: rgba(10,14,28,0.55); border: 1px solid rgba(255,255,255,0.18); color: #e8ecf7; font-size: 13px; padding: 8px 12px; border-radius: 20px; cursor: pointer; backdrop-filter: blur(8px); white-space: nowrap; font-family: var(--sans); }
+  #zen-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 20px 26px; background: linear-gradient(transparent, rgba(2,3,10,0.75)); color: #e8ecf7; }
+  #zen-cap .t { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  #zen-cap .c { font-size: 11px; line-height: 1.5; opacity: 0.7; font-family: var(--mono); }
+  #zen-cap .n { font-size: 10px; opacity: 0.45; margin-top: 6px; font-family: var(--mono); }
+  #zen-hint { position: absolute; left: 0; right: 0; bottom: 24px; text-align: center; font-size: 12px; color: rgba(232,236,247,0.7); transition: opacity 1.2s; pointer-events: none; }
+
   @media (max-width: 560px) {
+
+    #controls-bar { left: 12px; right: 12px; top: 60px; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .hud-btn { white-space: nowrap; padding: 7px 10px; font-size: 11.5px; }
+    #bottom-bar { padding-bottom: 26px; }
+    #credit { bottom: 6px; }
     #title-block h1 { font-size: 13px; }
     #hint { display: none; }
     #info-panel { width: 100%; max-width: 100%; }
@@ -246,6 +274,7 @@
   </div>
 
   <div id="controls-bar">
+    <button class="hud-btn zen" id="btn-zen">✨ 우주멍</button>
     <button class="hud-btn" id="btn-sky">오늘 밤 하늘</button>
     <button class="hud-btn" id="btn-log">발견 일지</button>
     <button class="hud-btn" id="btn-diary">다이어리</button>
@@ -263,6 +292,24 @@
   </div>
 
   <div id="hint">드래그: 시점 회전 · 스크롤: 확대/축소 · 천체 클릭: 이동</div>
+
+
+  <div id="zen">
+    <div class="zl" id="zen-a"></div>
+    <div class="zl" id="zen-b"></div>
+    <canvas id="zen-stars"></canvas>
+    <div id="zen-vig"></div>
+    <div id="zen-hint">화면을 터치하면 메뉴가 나타나요</div>
+    <div id="zen-ui">
+      <div id="zen-top">
+        <button id="zen-pause">⏸ 멈춤</button>
+        <button id="zen-next">다음 ⏭</button>
+        <button id="zen-snd">🔇 소리</button>
+        <button id="zen-close">✕ 닫기</button>
+      </div>
+      <div id="zen-cap"><div class="t" id="zen-t"></div><div class="c" id="zen-c"></div><div class="n" id="zen-n"></div></div>
+    </div>
+  </div>
 
   <div id="credit">© 2026 박내연. All rights reserved.</div>
 
@@ -4128,12 +4175,177 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     }, 1200);
   }
 
+
+  // =========================================================
+  // 우주멍 — 실제 우주 사진 100장이 천천히 흐르며 겹쳐 바뀌는 몰입 모드
+  // 사진: ESA/Hubble · ESA/Webb · ESO (CC BY 4.0, 출처 표기). 사진마다 원래 출처 문구를 그대로 표시.
+  // =========================================================
+  const ZEN_DATA = [[1,"h","heic0601a","오리온 성운","NASA, ESA, M. Robberto (STScI/ESA) and the Hubble Space Telescope Orion Treasury Project Team"],[2,"e","potw1217a","달과 은하수의 아치","ESO/S. Guisard"],[3,"h","heic1814a","화성과 토성","Saturn: NASA, ESA, A. Simon (GSFC) and the OPAL Team, and J. DePasquale (STScI); Mars: NASA, ESA, and STScI"],[4,"e","potw1222a","ALMA 위의 남쪽 은하수","ESO/B. Tafreshi (twanight.org)"],[5,"h","heic2017a","목성과 유로파","NASA, ESA, A. Simon (Goddard Space Flight Center), and M. H. Wong (University of California, Berkeley) and the OPAL team"],[6,"h","heic1917a","토성","NASA, ESA, A. Simon (Goddard Space Flight Center), and M.H. Wong (University of California, Berkeley)"],[7,"w","weic2602a","천왕성","ESA/Webb, NASA, CSA, STScI, P. Tiranti, H. Melin, M. Zamani (ESA/Webb)"],[8,"h","heic1307a","말머리 성운 (적외선)","NASA, ESA, and the Hubble Heritage Team (AURA/STScI)"],[9,"e","potw1504a","밤하늘을 가로지르는 혜성","P. Horálek/ESO"],[10,"w","weic2205a","카리나 성운의 우주 절벽","NASA, ESA, CSA, and STScI"],[11,"h","heic0515a","게 성운","NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble)"],[12,"h","heic1502a","안드로메다 은하","NASA, ESA, J. Dalcanton, B. F. Williams, L. C. Johnson (University of Washington) et al."],[13,"h","heic1501a","창조의 기둥","NASA, ESA/Hubble and the Hubble Heritage Team"],[14,"e","ann13016a","ALMA와 마젤란 은하","ESO/C. Malin (christophmalin.com)"],[15,"h","heic1608a","거품 성운","NASA, ESA, Hubble Heritage Team"],[16,"w","weic2216b","창조의 기둥 (제임스웹)","NASA, ESA, CSA, STScI; J. DePasquale, A. Koekemoer, A. Pagan (STScI)"],[17,"h","heic0506a","소용돌이 은하 M51","NASA, ESA, S. Beckwith (STScI), and The Hubble Heritage Team (STScI/AURA)"],[18,"e","potw1221a","달빛 아래 얼음 기둥","ESO/B. Tafreshi (twanight.org)"],[19,"h","heic1808a","석호 성운","NASA, ESA, STScI"],[20,"w","potm2208a","유령 은하 M74","ESA/Webb, NASA & CSA, J. Lee and the PHANGS-JWST Team. Acknowledgement: J. Schmidt"],[21,"h","heic0910h","나비 성운","NASA, ESA and the Hubble SM4 ERO Team"],[22,"e","uhd_img4255pc_bt_cc","라실라 천문대 위의 은하수","ESO/B. Tafreshi (twanight.org)"],[23,"h","heic2007a","별 탄생의 태피스트리","NASA, ESA, and STScI"],[24,"w","weic2411a","말머리 성운 (제임스웹)","ESA/Webb, NASA, CSA, K. Misselt (University of Arizona) and A. Abergel (IAS/University Paris-Saclay, CNRS)"],[25,"h","opo0328a","솜브레로 은하","NASA/ESA and The Hubble Heritage Team (STScI/AURA)"],[26,"h","heic1509a","웨스테르룬드 2 성단","ESA/Hubble"],[27,"e","potw1150a","ALMA의 밤하늘","ESO/B. Tafreshi (twanight.org)"],[28,"w","weic2601a","나선 성운 (제임스웹)","NASA, ESA, CSA, STScI, A. Pagan (STScI)"],[29,"h","heic1007a","신비의 산","NASA, ESA, M. Livio and the Hubble 20th Anniversary Team (STScI)"],[30,"h","heic0604a","시가 은하 M82","NASA, ESA and the Hubble Heritage Team (STScI/AURA). Acknowledgment: J. Gallagher (University of Wisconsin) et al."],[31,"h","heic1708a","목성의 소용돌이 구름","NASA, ESA, and A. Simon (GSFC)"],[32,"e","yb_vlt_milkyway","거대 망원경과 은하수","ESO/Y. Beletsky"],[33,"w","weic2417a","게 성운 (제임스웹)","NASA, ESA, CSA, STScI, T. Temim (Princeton University)"],[34,"h","heic1105a","타란툴라 성운","NASA, ESA"],[35,"h","heic0602a","바람개비 은하","ESA/Hubble"],[36,"e","eso1238a","토르의 투구 성운","ESO/B. Bailleul"],[37,"w","weic2407a","삼각형자리 은하의 NGC 604","NASA, ESA, CSA, STScI"],[38,"h","heic1310a","고리 성운","NASA, ESA, and C. Robert O’Dell (Vanderbilt University)"],[39,"h","heic1520a","베일 성운","NASA, ESA, Hubble Heritage Team"],[40,"e","eso0932a","은하수 파노라마","ESO/S. Brunier"],[41,"h","heic0817a","페르세우스 은하 NGC 1275","NASA, ESA and Andy Fabian (University of Cambridge, UK)"],[42,"w","weic2513a","고양이 발 성운","NASA, ESA, CSA, STScI"],[43,"h","heic0910i","스테판의 오중주","NASA, ESA and the Hubble SM4 ERO Team"],[44,"h","opo0006a","카리나 성운의 빛과 그림자","NASA/ESA, The Hubble Heritage Team (AURA/STScI)"],[45,"e","eso1250a","카리나 성운 전경","ESO. Acknowledgement: VPHAS+ Consortium/Cambridge Astronomical Survey Unit"],[46,"w","weic2520a","궁수자리 B2","NASA, ESA, CSA, STScI, A. Ginsburg, N. Budaiev, T. Yoo (University of Florida). Image processing: A. Pagan (STScI)"],[47,"h","heic1518a","쌍둥이 제트 성운","ESA/Hubble & NASA. Acknowledgement: Judy Schmidt"],[48,"h","heic2105a","용골자리 AG별","NASA, ESA and STScI"],[49,"e","potw1216a","APEX 망원경과 밤하늘","ESO/B. Tafreshi (twanight.org)"],[50,"w","weic2425a","NGC 602 성단","ESA/Webb, NASA & CSA, P. Zeidler, E. Sabbi, A. Nota, M. Zamani (ESA/Webb)"],[51,"h","heic1110a","센타우루스 A","NASA, ESA, and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration. Acknowledgment: R. O’Connell (University of Virginia) and the WFC3 Scientific Oversight Committee"],[52,"h","heic0715a","폭발하듯 태어나는 별무리","NASA, ESA and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration"],[53,"e","eso0934a","파라날의 별 풍경","ESO/S. Guisard"],[54,"w","weic2415a","뱀자리 성운","NASA, ESA, CSA, STScI, K. Pontoppidan (NASA’s JPL), J. Green (STScI)"],[55,"h","heic1406a","원숭이 머리 성운","NASA, ESA, and the Hubble Heritage Team (STScI/AURA)"],[56,"h","opo0028a","스피로그래프 성운","NASA/ESA and The Hubble Heritage Team (STScI/AURA)"],[57,"e","eso1723a","오리온 성운과 성단","ESO/G. Beccari"],[58,"w","weic2616a","사자 성운","NASA, ESA, CSA, STScI. Image Processing: A. Pagan (STScI)"],[59,"h","heic1302a","나선 은하 M106","NASA, ESA, the Hubble Heritage Team (STScI/AURA), and R. Gendler. Acknowledgment: J. GaBany"],[60,"h","heic1104a","솜털 나선 은하 NGC 2841","NASA, ESA and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration. Acknowledgment: M. Crockett, S. Kaviraj, R. O'Connell, B. Whitmore and the WFC3 Scientific Oversight Committee"],[61,"e","ann14045a","ALMA와 우리 은하의 중심","ESO/B. Tafreshi (twanight.org)"],[62,"w","weic2420a","서로 끌어당기는 은하 Arp 142","NASA, ESA, CSA, STScI"],[63,"h","heic0506b","독수리 성운의 첨탑","NASA, ESA, and The Hubble Heritage Team (STScI/AURA)"],[64,"h","heic1410a","목성의 대적점","NASA, ESA, and A. Simon (Goddard Space Flight Center). Acknowledgement: C. Go. Science: A. Simon, G. Orton, J. Rogers, M. Wong and I. de Pater"],[65,"e","eso0936a","석호 성운 전경","ESO"],[66,"w","weic2427a","솜브레로 은하 (제임스웹)","NASA, ESA, CSA, STScI"],[67,"h","heic2018b","나선 은하 NGC 2525","ESA/Hubble & NASA, A. Riess and the SH0ES team. Acknowledgment: Mahdi Zamani"],[68,"h","heic0910e","카리나 성운 (허블 WFC3)","NASA, ESA and the Hubble SM4 ERO Team"],[69,"e","eso0930a","삼렬 성운","ESO"],[70,"w","weic2518a","피스미스 24 성단","NASA, ESA, CSA, and STScI, A. Pagan (STScI)"],[71,"h","heic1305a","나선 은하 M77","NASA, ESA & A. van der Hoeven"],[72,"h","heic0910s","막대 나선 은하 NGC 6217","NASA, ESA and the Hubble SM4 ERO Team"],[73,"e","potw1322a","라실라 위의 세 행성","Y. Beletsky (LCO)/ESO"],[74,"w","weic2612a","시가 은하 (제임스웹)","NASA, ESA, CSA, A. Smercina (STScI), T. Williams (University of Manchester). Image processing: A. Pagan (STScI)"],[75,"h","potw2050a","상대성의 고리","ESA/Hubble & NASA, S. Jha. Acknowledgement: L. Shatz"],[76,"h","heic1907a","남쪽 하늘의 게 성운","NASA, ESA, and STScI"],[77,"e","eso1105a","반사 성운 M78","ESO/Igor Chekalin"],[78,"w","potm2510a","붉은 거미 성운","ESA/Webb, NASA & CSA, J. H. Kastner (Rochester Institute of Technology)"],[79,"h","opo0010a","오리온자리의 반사 성운","NASA/ESA and the Hubble Heritage Team (STScI)"],[80,"h","heic0707a","극한의 별 탄생","NASA, ESA, N. Smith (University of California, Berkeley), and The Hubble Heritage Team (STScI/AURA)"],[81,"e","eso0925a","오메가 성운","ESO"],[82,"w","weic2330a","카시오페이아 A 초신성 잔해","NASA, ESA, CSA, STScI, D. Milisavljevic (Purdue University), T. Temim (Princeton University), I. De Looze (University of Ghent) et al."],[83,"h","heic0905a","먼지 띠를 두른 은하 NGC 7049","NASA, ESA and W. Harris (McMaster University, Ontario, Canada)"],[84,"h","heic0706a","별의 요람 NGC 1672","NASA, ESA"],[85,"e","potw1119a","월식과 밤하늘","ESO/Y. Beletsky"],[86,"w","weic2426a","춤추는 은하 IC 2163과 NGC 2207","NASA, ESA, CSA, STScI"],[87,"h","heic1914a","목성의 빛깔","NASA, ESA, A. Simon (Goddard Space Flight Center), and M.H. Wong (University of California, Berkeley)"],[88,"h","heic2011a","행성상 성운 NGC 6302와 NGC 7027","NASA, ESA, and J. Kastner (RIT)"],[89,"e","eso1424a","삼각형자리 은하","ESO"],[90,"w","weic2506a","허빅-아로 49/50","NASA, ESA, CSA, STScI"],[91,"h","heic1814b","토성과 고리","NASA, ESA, A. Simon (GSFC) and the OPAL Team, and J. DePasquale (STScI)"],[92,"h","opo0501a","막대 나선 은하 NGC 1300","NASA, ESA, and The Hubble Heritage Team (STScI/AURA)"],[93,"e","eso0949a","불꽃 성운","ESO/J. Emerson/VISTA. Acknowledgment: Cambridge Astronomical Survey Unit"],[94,"w","weic2218a","창조의 기둥 (중적외선)","NASA, ESA, CSA, STScI, J. DePasquale (STScI), A. Pagan (STScI)"],[95,"h","potw1714a","천왕성의 오로라","ESA/Hubble & NASA, L. Lamy / Observatoire de Paris"],[96,"h","heic1712a","은하 NGC 1512와 NGC 1510","ESA/Hubble, NASA"],[97,"e","yb_vlt_moon_cnn_cc","파라날 하늘의 천체 만남","ESO/Y. Beletsky"],[98,"w","weic2620a","별의 요람 NGC 7129","NASA, ESA, CSA, STScI; Image Processing: A. Pagan (STScI)"],[99,"h","opo1438b","나선 은하 M81","NASA, ESA, A. Zezas (CfA), and A. Filippenko (UC Berkeley). Acknowledgment: Hubble Heritage Team (STScI/AURA) & O. Fox (University of California, Berkeley)"],[100,"e","eso0846a","우리 은하의 중심","ESO"]];
+  const ZEN_BASE = 'https://cosmic-tile.vercel.app/backgrounds/';
+  const ZEN_CDN = {
+    h: id => 'https://cdn.esahubble.org/archives/images/screen/' + id + '.jpg',
+    w: id => 'https://cdn.esawebb.org/archives/images/screen/' + id + '.jpg',
+    e: id => 'https://cdn.eso.org/images/screen/' + id + '.jpg'
+  };
+  const ZEN_SRC = { h: 'ESA/Hubble', w: 'ESA/Webb', e: 'ESO' };
+  const zenEl = document.getElementById('zen');
+  const zenUI = document.getElementById('zen-ui');
+  const zenLayers = [document.getElementById('zen-a'), document.getElementById('zen-b')];
+  const zenCache = {};
+  let zenOrder = [], zenPos = -1, zenCur = 0, zenTimer = null, zenPaused = false, zenHideT = null, zenActive = false;
+  const ZEN_HOLD = 13000;
+
+  function zenShuffle(){
+    const a = ZEN_DATA.map((_, i) => i);
+    for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  function zenLoad(idx){
+    if (zenCache[idx]) return zenCache[idx];
+    const row = ZEN_DATA[idx];
+    const urls = [ZEN_BASE + String(row[0]).padStart(3, '0') + '.webp', ZEN_CDN[row[1]](row[2])];
+    zenCache[idx] = new Promise(resolve => {
+      let k = 0;
+      const tryNext = () => {
+        if (k >= urls.length){ resolve(null); return; }
+        const im = new Image();
+        im.decoding = 'async';
+        im.onload = () => resolve(im);
+        im.onerror = () => { tryNext(); };
+        im.src = urls[k++];
+      };
+      tryNext();
+    });
+    return zenCache[idx];
+  }
+  function zenKenBurns(img){
+    const w = Math.random() < 0.5 ? -1 : 1, h = Math.random() < 0.5 ? -1 : 1;
+    const tx = 3 + Math.random() * 3, ty = 1.5 + Math.random() * 2.5;
+    const s0 = 1.12 + Math.random() * 0.06, s1 = s0 + 0.12 + Math.random() * 0.08;
+    const dur = ZEN_HOLD + 7000;
+    try {
+      img.animate([
+        { transform: 'translate(' + (-w * tx) + '%,' + (-h * ty) + '%) scale(' + s0 + ')' },
+        { transform: 'translate(' + (w * tx) + '%,' + (h * ty) + '%) scale(' + s1 + ')' }
+      ], { duration: dur, easing: 'linear', fill: 'forwards' });
+    } catch (e) {}
+  }
+  async function zenShow(){
+    if (!zenActive) return;
+    zenPos = (zenPos + 1) % zenOrder.length;
+    const idx = zenOrder[zenPos];
+    const im = await zenLoad(idx);
+    if (!zenActive) return;
+    if (!im){ // 불러오지 못한 사진은 건너뜀 (전부 실패하면 별빛 배경만)
+      zenTimer = setTimeout(zenShow, 400); zenFails++; if (zenFails > 6){ zenTimer = setTimeout(zenShow, 8000); }
+      return;
+    }
+    zenFails = 0;
+    const next = 1 - zenCur;
+    const layer = zenLayers[next];
+    layer.innerHTML = '';
+    const el = document.createElement('img');
+    el.src = im.src; el.alt = ''; el.draggable = false;
+    layer.appendChild(el);
+    zenKenBurns(el);
+    zenLayers[zenCur].classList.remove('on');
+    layer.classList.add('on');
+    zenCur = next;
+    const row = ZEN_DATA[idx];
+    document.getElementById('zen-t').textContent = row[3];
+    document.getElementById('zen-c').textContent = '© ' + row[4];
+    document.getElementById('zen-n').textContent = ZEN_SRC[row[1]] + ' · CC BY 4.0';
+    // 다음 사진 미리 불러오기
+    zenLoad(zenOrder[(zenPos + 1) % zenOrder.length]);
+    if (!zenPaused) zenTimer = setTimeout(zenShow, ZEN_HOLD);
+  }
+  let zenFails = 0;
+
+  // 별가루 — 깊이가 다른 세 겹이 서로 다른 속도로 흘러 '날아가는' 느낌
+  const zenCanvas = document.getElementById('zen-stars');
+  const zctx = zenCanvas.getContext('2d');
+  let zStars = [], zRaf = 0, zLast = 0;
+  function zenResize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    zenCanvas.width = innerWidth * dpr; zenCanvas.height = innerHeight * dpr;
+    zctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function zenInitStars(){
+    zStars = [];
+    const n = innerWidth < 600 ? 70 : 130;
+    for (let i = 0; i < n; i++){
+      const d = Math.random();
+      zStars.push({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, d: d, r: 0.4 + d * 1.3, tw: Math.random() * 6.28 });
+    }
+  }
+  function zenStarLoop(t){
+    if (!zenActive) return;
+    zRaf = requestAnimationFrame(zenStarLoop);
+    const dt = Math.min((t - zLast) / 1000, 0.05); zLast = t;
+    zctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const s of zStars){
+      s.x -= (4 + s.d * 22) * dt; s.y += (1 + s.d * 5) * dt; s.tw += dt * (0.6 + s.d);
+      if (s.x < -4) s.x = innerWidth + 4;
+      if (s.y > innerHeight + 4) s.y = -4;
+      zctx.globalAlpha = 0.25 + 0.55 * s.d * (0.6 + 0.4 * Math.sin(s.tw));
+      zctx.fillStyle = '#dfe9ff';
+      zctx.beginPath(); zctx.arc(s.x, s.y, s.r, 0, 6.2832); zctx.fill();
+    }
+  }
+  function zenFlashUI(){
+    zenUI.classList.add('show');
+    document.getElementById('zen-hint').style.opacity = 0;
+    clearTimeout(zenHideT);
+    zenHideT = setTimeout(() => zenUI.classList.remove('show'), 4500);
+  }
+  function zenSyncSnd(){
+    const s = document.getElementById('btn-sound');
+    document.getElementById('zen-snd').textContent = s.textContent.indexOf('🔊') >= 0 ? '🔊 소리' : '🔇 소리';
+  }
+  function zenOpen(){
+    if (zenActive) return;
+    zenActive = true; window.__zenOpen = true;
+    zenEl.classList.add('open');
+    zenOrder = zenShuffle(); zenPos = -1; zenFails = 0; zenPaused = false;
+    document.getElementById('zen-pause').textContent = '⏸ 멈춤';
+    zenLayers.forEach(l => { l.classList.remove('on'); l.innerHTML = ''; l.classList.add('fallback'); });
+    zenLayers[0].classList.add('on'); zenCur = 0;
+    zenResize(); zenInitStars(); zLast = performance.now(); zRaf = requestAnimationFrame(zenStarLoop);
+    document.getElementById('zen-hint').style.opacity = 1;
+    zenSyncSnd();
+    zenShow();
+    setTimeout(() => { if (zenActive) document.getElementById('zen-hint').style.opacity = 0; }, 6000);
+  }
+  function zenClose(){
+    zenActive = false; window.__zenOpen = false;
+    clearTimeout(zenTimer); clearTimeout(zenHideT); cancelAnimationFrame(zRaf);
+    zenEl.classList.remove('open'); zenUI.classList.remove('show');
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  }
+  document.getElementById('btn-zen').addEventListener('click', zenOpen);
+  document.getElementById('zen-close').addEventListener('click', e => { e.stopPropagation(); zenClose(); });
+  document.getElementById('zen-next').addEventListener('click', e => { e.stopPropagation(); clearTimeout(zenTimer); zenShow(); zenFlashUI(); });
+  document.getElementById('zen-pause').addEventListener('click', e => {
+    e.stopPropagation(); zenPaused = !zenPaused;
+    e.target.textContent = zenPaused ? '▶ 재생' : '⏸ 멈춤';
+    clearTimeout(zenTimer); if (!zenPaused) zenTimer = setTimeout(zenShow, 1500);
+    zenFlashUI();
+  });
+  document.getElementById('zen-snd').addEventListener('click', e => {
+    e.stopPropagation(); document.getElementById('btn-sound').click(); zenSyncSnd(); zenFlashUI();
+  });
+  zenEl.addEventListener('click', () => { if (zenUI.classList.contains('show')) { zenUI.classList.remove('show'); } else { zenFlashUI(); } });
+  window.addEventListener('keydown', e => { if (zenActive && e.key === 'Escape') zenClose(); });
+  window.addEventListener('resize', () => { if (zenActive){ zenResize(); zenInitStars(); } });
+  document.addEventListener('visibilitychange', () => { if (zenActive && !document.hidden && !zenPaused){ clearTimeout(zenTimer); zenTimer = setTimeout(zenShow, 500); } });
+
   // ---------- 애니메이션 루프 ----------
   const clock = new THREE.Clock();
   let frameCount = 0;
 
   function animate(){
     requestAnimationFrame(animate);
+    if (window.__zenOpen){ clock.getDelta(); return; }
     const delta = Math.min(clock.getDelta(), 0.05);
     if (!isPaused){
       simTime += delta * timeScale;

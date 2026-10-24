@@ -262,7 +262,7 @@
   #zen-cap .t { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
   #zen-cap .c { font-size: 11px; line-height: 1.5; opacity: 0.7; font-family: var(--mono); }
   #zen-cap .n { font-size: 10px; opacity: 0.45; margin-top: 6px; font-family: var(--mono); }
-  #zen-hint { position: absolute; left: 0; right: 0; bottom: 24px; text-align: center; font-size: 12px; color: rgba(232,236,247,0.7); transition: opacity 1.2s; pointer-events: none; }
+  #zen-hint { position: absolute; left: 0; right: 0; bottom: 24px; text-align: center; font-size: 12px; line-height: 1.7; padding: 0 16px; color: rgba(232,236,247,0.7); transition: opacity 1.2s; pointer-events: none; }
 
   @media (max-width: 560px) {
 
@@ -315,7 +315,7 @@
     <div class="zl" id="zen-b"></div>
     <canvas id="zen-stars"></canvas>
     <div id="zen-vig"></div>
-    <div id="zen-hint">화면을 터치하면 메뉴가 나타나요</div>
+    <div id="zen-hint">NASA·ESA 허블·제임스웹 우주망원경과 ESO 천문대가<br>촬영한 실제 우주 사진이에요<br><span style="opacity:.7">화면을 터치하면 메뉴가 나타나요</span></div>
     <div id="zen-ui">
       <div id="zen-top">
         <button id="zen-pause">⏸ 멈춤</button>
@@ -3298,7 +3298,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     set('#btn-sound', t('sound_off')); set('#btn-overview', 'Overview'); set('#btn-pause', 'Pause');
     set('#time-panel span', 'Orbit speed');
     set('#hint', 'Drag: rotate · Scroll: zoom · Click a body: fly to it');
-    set('#zen-hint', 'Tap the screen to show the menu');
+    document.getElementById('zen-hint').innerHTML = 'Real photos taken by the NASA/ESA Hubble and Webb space telescopes<br>and ESO observatories<br><span style="opacity:.7">Tap the screen to show the menu</span>';
     set('#zen-pause', t('zen_pause')); set('#zen-prev', '⏮ Prev'); set('#zen-next', 'Next ⏭'); set('#zen-snd', t('sound_off')); set('#zen-close', '✕ Close');
     set('#credit', '© 2026 IdeaFusionLab. All rights reserved.');
     set('#sky-panel .side-panel-title', "Tonight's sky in your area");
@@ -4396,7 +4396,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     const row = ZEN_DATA[idx];
     document.getElementById('zen-t').textContent = LANG === 'ko' ? row[3] : row[5];
     document.getElementById('zen-c').textContent = '© ' + row[4];
-    document.getElementById('zen-n').textContent = ZEN_SRC[row[1]] + ' · CC BY 4.0';
+    document.getElementById('zen-n').textContent = (LANG === 'ko' ? '실제 관측 사진 · ' : 'Real observation · ') + ZEN_SRC[row[1]] + ' · CC BY 4.0';
     // 다음 사진 미리 불러오기
     zenLoad(zenOrder[(zenPos + 1) % zenOrder.length]);
     if (!zenPaused) zenTimer = setTimeout(() => zenShow(1), ZEN_HOLD);
@@ -4456,7 +4456,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('zen-hint').style.opacity = 1;
     zenSyncSnd();
     zenShow();
-    setTimeout(() => { if (zenActive) document.getElementById('zen-hint').style.opacity = 0; }, 6000);
+    setTimeout(() => { if (zenActive) document.getElementById('zen-hint').style.opacity = 0; }, 8000);
   }
   function zenClose(){
     zenActive = false; window.__zenOpen = false;

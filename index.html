@@ -230,6 +230,19 @@
 
 
   /* ===== 우주멍 ===== */
+  #zgal { position: fixed; inset: 0; z-index: 200; background: #05070f; overflow-y: auto; color: #e8ecf7; font-family: var(--sans); }
+  #zgal-head { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; background: rgba(5,7,15,0.94); border-bottom: 1px solid rgba(255,255,255,0.12); }
+  #zgal-head .ttl { font-size: 14px; font-weight: 600; margin-right: auto; }
+  #zgal-head button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e8ecf7; font-size: 12px; padding: 7px 12px; border-radius: 16px; cursor: pointer; }
+  #zgal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 12px; }
+  .zg-card { position: relative; border-radius: 10px; overflow: hidden; background: #0d1224; border: 2px solid transparent; cursor: pointer; }
+  .zg-card img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #0d1224; }
+  .zg-card .cap { padding: 6px 8px 8px; font-size: 11px; line-height: 1.35; }
+  .zg-card .cap b { color: #ffb870; margin-right: 4px; }
+  .zg-card.out { border-color: #ff6b6b; }
+  .zg-card.out img { opacity: 0.25; }
+  .zg-card.out::after { content: '\2715'; position: absolute; top: 6px; right: 8px; color: #ff6b6b; font-size: 20px; font-weight: 700; }
+
   .hud-btn.zen { border-color: rgba(255,184,112,0.6); color: #ffd9a8; }
   .hud-btn.zen:hover { border-color: #ffb870; }
   #zen { position: fixed; inset: 0; z-index: 60; background: #02030a; display: none; overflow: hidden; touch-action: manipulation; }
@@ -4469,6 +4482,49 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   window.addEventListener('resize', () => { if (zenActive){ zenResize(); zenInitStars(); } });
   document.addEventListener('visibilitychange', () => { if (zenActive && !document.hidden && !zenPaused){ clearTimeout(zenTimer); zenTimer = setTimeout(() => zenShow(1), 500); } });
 
+
+  // 사진 갤러리 (?gallery) — 200장을 한눈에 보고, 뺄 사진을 눌러 표시한 뒤 번호를 복사
+  function openGallery(){
+    window.__zenOpen = true;
+    const ko = LANG === 'ko';
+    const root = document.createElement('div'); root.id = 'zgal';
+    root.innerHTML = '<div id="zgal-head"><span class="ttl"></span><button id="zg-copy"></button><button id="zg-clear"></button><button id="zg-close"></button></div><div id="zgal-grid"></div>';
+    document.body.appendChild(root);
+    const out = new Set();
+    const ttl = root.querySelector('.ttl');
+    const upd = () => {
+      ttl.textContent = (ko ? '우주멍 사진 ' : 'Space Drift photos ') + ZEN_DATA.length + (ko ? '장 · 뺄 사진 ' : ' · remove ') + out.size + (ko ? '장' : '');
+      document.getElementById('zg-copy').textContent = ko ? '뺄 번호 복사' : 'Copy numbers';
+      document.getElementById('zg-clear').textContent = ko ? '초기화' : 'Reset';
+      document.getElementById('zg-close').textContent = ko ? '닫기' : 'Close';
+    };
+    const grid = document.getElementById('zgal-grid');
+    ZEN_DATA.forEach(row => {
+      const n = row[0];
+      const card = document.createElement('div'); card.className = 'zg-card';
+      const im = document.createElement('img'); im.loading = 'lazy'; im.alt = '';
+      const urls = [];
+      if (n <= 100) urls.push(ZEN_BASE + String(n).padStart(3, '0') + '.webp');
+      urls.push(ZEN_CDN[row[1]](row[2]));
+      let k = 0; im.onerror = () => { if (k < urls.length) im.src = urls[k++]; };
+      im.onerror();
+      const cap = document.createElement('div'); cap.className = 'cap';
+      const b = document.createElement('b'); b.textContent = '#' + n;
+      cap.appendChild(b); cap.appendChild(document.createTextNode(ko ? row[3] : row[5]));
+      card.appendChild(im); card.appendChild(cap);
+      card.addEventListener('click', () => { if (out.has(n)) out.delete(n); else out.add(n); card.classList.toggle('out', out.has(n)); upd(); });
+      grid.appendChild(card);
+    });
+    document.getElementById('zg-copy').addEventListener('click', () => {
+      const txt = Array.from(out).sort((a, b) => a - b).join(', ');
+      const done = () => { const bt = document.getElementById('zg-copy'); bt.textContent = ko ? '복사됨!' : 'Copied!'; setTimeout(upd, 1500); };
+      try { navigator.clipboard.writeText(txt).then(done, () => { prompt('numbers', txt); }); } catch (e) { prompt('numbers', txt); }
+    });
+    document.getElementById('zg-clear').addEventListener('click', () => { out.clear(); grid.querySelectorAll('.zg-card.out').forEach(c => c.classList.remove('out')); upd(); });
+    document.getElementById('zg-close').addEventListener('click', () => { location.href = location.pathname; });
+    upd();
+  }
+  if (/[?&]gallery\b/.test(location.search)) openGallery();
   // ---------- 애니메이션 루프 ----------
   const clock = new THREE.Clock();
   let frameCount = 0;

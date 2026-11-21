@@ -3802,7 +3802,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('p-facts').innerHTML = SUN_INFO[LANG === 'ko' ? 'ko_facts' : 'en_facts']
       .map(f => `<div class="fact-row"><span class="k">${f[0]}</span><span class="v">${f[1]}</span></div>`).join('');
     document.getElementById('p-desc').innerHTML = paras(SUN_INFO[LANG === 'ko' ? 'ko' : 'en']);
-    appendLinks([[LL('NASA 태양', 'NASA: The Sun'), NASA_BODY_URL.sun], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL]]);
+    appendLinks([[LL('NASA 태양', 'NASA: The Sun'), NASA_BODY_URL.sun], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL], wikiLinks('태양', 'Sun')]);
     infoPanel.classList.add('open');
   }
   function showInfoPanelPlanet(b){
@@ -3812,7 +3812,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('p-en').textContent = LANG === 'ko' ? b.en : '';
     document.getElementById('p-facts').innerHTML = b.facts.map(f => `<div class="fact-row"><span class="k">${f[0]}</span><span class="v">${f[1]}</span></div>`).join('');
     document.getElementById('p-desc').innerHTML = Array.isArray(b.desc) ? paras(b.desc) : escHtml(b.desc);
-    appendLinks([[LL(`NASA ${b.name}`, `NASA: ${b.name}`), NASA_BODY_URL[b.key]], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL]]);
+    appendLinks([[LL(`NASA ${b.name}`, `NASA: ${b.name}`), NASA_BODY_URL[b.key]], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL], wikiLinks(b.name_ko || b.name, WIKI_EN_FIX[b.key] || b.en)]);
     infoPanel.classList.add('open');
   }
   function showInfoPanelAsteroid(row, isHero){
@@ -3855,7 +3855,8 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
         : `A real object in the ${GROUP_LABEL[group]||'asteroid belt'}. It was named after 2008 and is not yet in the discovery-record database, but its orbit is based on real observations.`;
     }
     document.getElementById('p-desc').textContent = desc;
-    appendLinks([[LL('NASA JPL 소행성 데이터베이스', 'NASA JPL Small-Body Database'), jplSbdbUrl(name)]]);
+    appendLinks([[LL('NASA JPL 소행성 데이터베이스', 'NASA JPL Small-Body Database'), jplSbdbUrl(name)],
+      wikiLinks(typeof ASTEROID_KO !== 'undefined' ? ASTEROID_KO[name] : '', WIKI_EN_FIX[name] || `${name} asteroid`)]);
     infoPanel.classList.add('open');
   }
   function closeInfoPanel(){ infoPanel.classList.remove('open'); }
@@ -4427,7 +4428,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       const en = (LANG === 'ko' && name !== label ? label + ' · ' : '') + 'HYG Database v4.1';
       showSkyPanel(LL('항성','STAR'), name, en, facts, desc);
       const hipNo = info[6];
-      appendLinks([(exoIdx != null && SKY.exo.data[exoIdx]) ? [LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(SKY.exo.data[exoIdx][0])] : null]);
+      appendLinks([proper ? wikiLinks(STAR_KO[proper] || proper, WIKI_EN_FIX[proper] || proper) : null, (exoIdx != null && SKY.exo.data[exoIdx]) ? [LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(SKY.exo.data[exoIdx][0])] : null]);
       showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : lightStory(ly), 5200);
@@ -4460,14 +4461,15 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       showSkyPanel(LANG === 'ko' ? (DSO_TYPE_KO[type] || '심우주 천체') : (DSO_TYPE_EN[type] || 'DEEP SKY').toUpperCase(), name, en, facts,
         paras([story, story ? '' : typeDesc, light, con >= 0 ? conStory(con) : '']));
       const simIdent = mNum ? `M ${mNum}` : (/^(NGC|IC) /.test(id) ? id : (/^Mel\d+/.test(id) ? 'Mel ' + parseInt(id.slice(3)) : ''));
-      appendLinks([mNum ? [LL('NASA 허블 메시에 목록', 'NASA Hubble Messier Catalog'), hubbleMessierUrl(mNum)] : null]);
+      appendLinks([mNum ? [LL('NASA 허블 메시에 목록', 'NASA Hubble Messier Catalog'), hubbleMessierUrl(mNum)] : null,
+        (mNum || common) ? wikiLinks(common ? (DSO_KO[common] || '') : '', mNum ? `Messier ${mNum}` : common) : null]);
       showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : (light || typeDesc), 5200);
     } else {
       placeSkyMarker(SKY.exo.dirs, idx);
       logName = name = await showExoSystem(idx);
-      appendLinks([[LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(name)]]);
+      appendLinks([[LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(name)], wikiLinks(name, name)]);
       const pl = SKY.exo.data[idx][6].length;
       showAwe(LL(`${name} 곁을 행성 ${pl}개가 돎.`, `${pl} planet${pl > 1 ? 's' : ''} orbit ${name}.`), 4800);
     }
@@ -4499,8 +4501,20 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   function exoArchiveUrl(host){ return 'https://exoplanetarchive.ipac.caltech.edu/overview/' + encodeURIComponent(host); }
   function jplSbdbUrl(name){ return 'https://ssd.jpl.nasa.gov/sbdb.cgi?sstr=' + encodeURIComponent(name); }
   function hubbleMessierUrl(n){ return `https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-${n}/`; }
+  // 위키백과: 제목이 정확하면 바로 문서로, 아니면 검색 결과로 이동(go=Go)
+  function wikiUrl(lang, term){ return `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}&go=Go`; }
+  const WIKI_EN_FIX = {Castor:'Castor (star)',Pollux:'Pollux (star)',Atlas:'Atlas (star)',Electra:'Electra (star)',Maia:'Maia (star)',Merope:'Merope (star)',Pleione:'Pleione (star)',Alcyone:'Alcyone (star)',Mimosa:'Mimosa (star)',Peacock:'Peacock (star)',Alcor:'Alcor (star)',Toliman:'Alpha Centauri','Rigil Kentaurus':'Alpha Centauri',
+    sun:'Sun',mercury:'Mercury (planet)',venus:'Venus',earth:'Earth',mars:'Mars',jupiter:'Jupiter',saturn:'Saturn',uranus:'Uranus',neptune:'Neptune',pluto:'Pluto',eris:'Eris (dwarf planet)',
+    Ceres:'Ceres (dwarf planet)',Vesta:'4 Vesta',Pallas:'2 Pallas',Juno:'3 Juno',Hygiea:'10 Hygiea',Eros:'433 Eros',Bennu:'101955 Bennu',Psyche:'16 Psyche',Haumea:'Haumea',Makemake:'Makemake'};
+  const stripParen = x => String(x || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  function wikiLinks(koTerm, enTerm){
+    const out = [];
+    if (LANG === 'ko' && koTerm) out.push(['위키백과 (한국어)', wikiUrl('ko', stripParen(koTerm))]);
+    if (enTerm) out.push([LANG === 'ko' ? '위키백과 (영어)' : 'Wikipedia', wikiUrl('en', enTerm)]);
+    return out;
+  }
   function linksHtml(list){
-    const items = list.filter(Boolean);
+    const items = [].concat(...list.filter(Boolean).map(x => Array.isArray(x[0]) ? x : [x])).filter(Boolean);
     if (!items.length) return '';
     return `<div class="more-links"><div class="more-title">${LL('더 알아보기', 'Learn more')}</div>` +
       items.map(([label, url]) => `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">${escHtml(label)} ↗</a>`).join('') + '</div>';
@@ -4608,6 +4622,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     const story = SKY.stories.con[ci] ? storyOf(SKY.stories.con[ci]) : '';
     document.getElementById('p-desc').innerHTML = paras([story,
       LL('국제천문연맹(IAU)이 정한 88개 별자리 중 하나. 별자리 선은 별을 이어 그린 모양이고, 실제로는 거리가 제각각인 별들이 같은 방향에 보이는 것.', 'One of the 88 constellations defined by the IAU. The lines are a picture drawn between stars that only appear close together — in reality they lie at very different distances.')]);
+    appendLinks([wikiLinks(CON_KO[ci], `${CON_EN[ci]} (constellation)`)]);
     infoPanel.classList.add('open');
   }
 

@@ -314,7 +314,6 @@
     <div id="title-block">
       <div id="title-row"><h1>우주로</h1><button id="btn-lang" type="button">English</button></div>
       <p id="date-readout">SIM T+0.0y</p>
-      <p id="obj-count" style="margin:2px 0 0;font-size:11px;letter-spacing:.04em;opacity:.72"></p>
     </div>
   </div>
 
@@ -4428,8 +4427,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       const en = (LANG === 'ko' && name !== label ? label + ' · ' : '') + 'HYG Database v4.1';
       showSkyPanel(LL('항성','STAR'), name, en, facts, desc);
       const hipNo = info[6];
-      appendLinks([[LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(hipNo ? 'HIP ' + hipNo : label)],
-        (exoIdx != null && SKY.exo.data[exoIdx]) ? [LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(SKY.exo.data[exoIdx][0])] : null]);
+      appendLinks([(exoIdx != null && SKY.exo.data[exoIdx]) ? [LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(SKY.exo.data[exoIdx][0])] : null]);
       showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : lightStory(ly), 5200);
@@ -4462,15 +4460,14 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       showSkyPanel(LANG === 'ko' ? (DSO_TYPE_KO[type] || '심우주 천체') : (DSO_TYPE_EN[type] || 'DEEP SKY').toUpperCase(), name, en, facts,
         paras([story, story ? '' : typeDesc, light, con >= 0 ? conStory(con) : '']));
       const simIdent = mNum ? `M ${mNum}` : (/^(NGC|IC) /.test(id) ? id : (/^Mel\d+/.test(id) ? 'Mel ' + parseInt(id.slice(3)) : ''));
-      appendLinks([mNum ? [LL('NASA 허블 메시에 목록', 'NASA Hubble Messier Catalog'), hubbleMessierUrl(mNum)] : null,
-        simIdent ? [LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(simIdent)] : null]);
+      appendLinks([mNum ? [LL('NASA 허블 메시에 목록', 'NASA Hubble Messier Catalog'), hubbleMessierUrl(mNum)] : null]);
       showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : (light || typeDesc), 5200);
     } else {
       placeSkyMarker(SKY.exo.dirs, idx);
       logName = name = await showExoSystem(idx);
-      appendLinks([[LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(name)], [LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(name)]]);
+      appendLinks([[LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(name)]]);
       const pl = SKY.exo.data[idx][6].length;
       showAwe(LL(`${name} 곁을 행성 ${pl}개가 돎.`, `${pl} planet${pl > 1 ? 's' : ''} orbit ${name}.`), 4800);
     }

@@ -137,6 +137,34 @@
     z-index: 25; padding: 70px 20px 22px; overflow-y: auto;
   }
   #sky-panel.open, #diary-panel.open, #log-panel.open { transform: translateX(0); }
+  #search-panel {
+    position: fixed; top: 0; left: 0; height: 100%; width: 340px; max-width: 92vw;
+    background: var(--panel-bg); border-right: 1px solid var(--panel-border); backdrop-filter: blur(14px);
+    transform: translateX(-100%); transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+    z-index: 30; padding: 60px 16px 16px; display: flex; flex-direction: column;
+  }
+  #search-panel.open { transform: translateX(0); }
+  #search-input {
+    width: 100%; padding: 12px 14px; border-radius: 10px; font-size: 16px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--panel-border); color: var(--text-main); outline: none;
+  }
+  #search-input:focus { border-color: var(--accent); }
+  #search-results { margin-top: 10px; overflow-y: auto; flex: 1; }
+  .search-item {
+    display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    padding: 10px 6px; border-bottom: 1px solid rgba(140,170,255,0.08); color: var(--text-main);
+  }
+  .search-item:hover, .search-item:active { background: rgba(111,184,255,0.08); }
+  .search-item .n { display: block; font-size: 14px; font-weight: 600; }
+  .search-item .s { display: block; font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+  .search-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; padding: 10px 4px; }
+  .more-links { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(140,170,255,0.12); }
+  .more-links .more-title { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; letter-spacing: .04em; }
+  .more-links a {
+    display: inline-block; margin: 0 6px 8px 0; padding: 7px 11px; border-radius: 8px; font-size: 12px;
+    color: var(--accent); border: 1px solid var(--panel-border); text-decoration: none; background: rgba(111,184,255,0.06);
+  }
+  .more-links a:hover { border-color: var(--accent); }
   .side-panel-title { font-size: 19px; font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
   .side-panel-sub { font-size: 11px; color: var(--text-dim); font-family: var(--mono); margin-bottom: 18px; }
   .side-close-btn {
@@ -291,6 +319,7 @@
   </div>
 
   <div id="controls-bar">
+    <button class="hud-btn" id="btn-search">🔍 검색</button>
     <button class="hud-btn zen" id="btn-zen">✨ 우주멍</button>
     <button class="hud-btn" id="btn-sky">오늘 밤 하늘</button>
     <button class="hud-btn" id="btn-log">발견 일지</button>
@@ -354,6 +383,11 @@
     <div id="diary-list"></div>
   </div>
 
+  <div id="search-panel">
+    <button class="side-close-btn" id="btn-close-search">&times;</button>
+    <input id="search-input" type="search" autocomplete="off" spellcheck="false">
+    <div id="search-results"></div>
+  </div>
   <div id="log-panel">
     <button class="side-close-btn" id="btn-close-log">&times;</button>
     <div class="side-panel-title">나의 발견 일지</div>
@@ -3715,6 +3749,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   }
 
   function focusOnBody(kind, key){
+    camState.goal = null;
     camState.followKey = key; camState.followKind = kind;
     let radius = SUN_RADIUS;
     if (kind === 'planet'){
@@ -3738,6 +3773,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   let focusedFieldRow = null;
   function focusOnField(row, point){
     camState.followKey = null; camState.followKind = 'field';
+    camState.goal = null;
     focusedFieldRow = row;
     camState.target.copy(point);
     camState.targetRadius = Math.max(MIN_R, 3.5);
@@ -3751,6 +3787,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     camState.followKey = null; camState.followKind = null; focusedFieldRow = null;
     camState.target.set(0,0,0);
     camState.targetTheta = 0.9; camState.targetPhi = 1.05; camState.targetRadius = 130;
+    camState.goal = null; clearConLines();
     skyMarker.visible = false;
     closeInfoPanel();
   });
@@ -3766,6 +3803,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('p-facts').innerHTML = SUN_INFO[LANG === 'ko' ? 'ko_facts' : 'en_facts']
       .map(f => `<div class="fact-row"><span class="k">${f[0]}</span><span class="v">${f[1]}</span></div>`).join('');
     document.getElementById('p-desc').innerHTML = paras(SUN_INFO[LANG === 'ko' ? 'ko' : 'en']);
+    appendLinks([[LL('NASA 태양', 'NASA: The Sun'), NASA_BODY_URL.sun], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL]]);
     infoPanel.classList.add('open');
   }
   function showInfoPanelPlanet(b){
@@ -3775,6 +3813,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     document.getElementById('p-en').textContent = LANG === 'ko' ? b.en : '';
     document.getElementById('p-facts').innerHTML = b.facts.map(f => `<div class="fact-row"><span class="k">${f[0]}</span><span class="v">${f[1]}</span></div>`).join('');
     document.getElementById('p-desc').innerHTML = Array.isArray(b.desc) ? paras(b.desc) : escHtml(b.desc);
+    appendLinks([[LL(`NASA ${b.name}`, `NASA: ${b.name}`), NASA_BODY_URL[b.key]], [LL('한국천문연구원', 'KASI (Korea)'), KASI_URL]]);
     infoPanel.classList.add('open');
   }
   function showInfoPanelAsteroid(row, isHero){
@@ -3817,13 +3856,15 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
         : `A real object in the ${GROUP_LABEL[group]||'asteroid belt'}. It was named after 2008 and is not yet in the discovery-record database, but its orbit is based on real observations.`;
     }
     document.getElementById('p-desc').textContent = desc;
+    appendLinks([[LL('NASA JPL 소행성 데이터베이스', 'NASA JPL Small-Body Database'), jplSbdbUrl(name)]]);
     infoPanel.classList.add('open');
   }
   function closeInfoPanel(){ infoPanel.classList.remove('open'); }
   document.getElementById('btn-close-panel').addEventListener('click', () => {
     closeInfoPanel();
     skyMarker.visible = false;
-    camState.followKey = null; camState.followKind = null; focusedFieldRow = null;
+    // 검색으로 하늘 방향을 보고 있을 때는 닫아도 그 방향 유지
+    if (!camState.goal){ camState.followKey = null; camState.followKind = null; focusedFieldRow = null; }
   });
 
   // =========================================================
@@ -4386,6 +4427,10 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       }
       const en = (LANG === 'ko' && name !== label ? label + ' · ' : '') + 'HYG Database v4.1';
       showSkyPanel(LL('항성','STAR'), name, en, facts, desc);
+      const hipNo = info[6];
+      appendLinks([[LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(hipNo ? 'HIP ' + hipNo : label)],
+        (exoIdx != null && SKY.exo.data[exoIdx]) ? [LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(SKY.exo.data[exoIdx][0])] : null]);
+      showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : lightStory(ly), 5200);
     } else if (layer === 'deep'){
@@ -4416,11 +4461,16 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       const en = [mNum ? `M ${mNum}` : '', id, LANG === 'ko' && common ? common : '', 'OpenNGC'].filter(Boolean).join(' · ');
       showSkyPanel(LANG === 'ko' ? (DSO_TYPE_KO[type] || '심우주 천체') : (DSO_TYPE_EN[type] || 'DEEP SKY').toUpperCase(), name, en, facts,
         paras([story, story ? '' : typeDesc, light, con >= 0 ? conStory(con) : '']));
+      const simIdent = mNum ? `M ${mNum}` : (/^(NGC|IC) /.test(id) ? id : (/^Mel\d+/.test(id) ? 'Mel ' + parseInt(id.slice(3)) : ''));
+      appendLinks([mNum ? [LL('NASA 허블 메시에 목록', 'NASA Hubble Messier Catalog'), hubbleMessierUrl(mNum)] : null,
+        simIdent ? [LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(simIdent)] : null]);
+      showConLines(con, 12000);
       logName = name;
       showAwe(story ? story.split(/(?<=[.!?])\s/)[0] : (light || typeDesc), 5200);
     } else {
       placeSkyMarker(SKY.exo.dirs, idx);
       logName = name = await showExoSystem(idx);
+      appendLinks([[LL('NASA 외계행성 아카이브', 'NASA Exoplanet Archive'), exoArchiveUrl(name)], [LL('SIMBAD 천체 데이터베이스', 'SIMBAD database'), simbadUrl(name)]]);
       const pl = SKY.exo.data[idx][6].length;
       showAwe(LL(`${name} 곁을 행성 ${pl}개가 돎.`, `${pl} planet${pl > 1 ? 's' : ''} orbit ${name}.`), 4800);
     }
@@ -4439,6 +4489,274 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       if (!skyGroup.visible) skyMarker.visible = false;
     });
   }
+  // =========================================================
+  // 더 알아보기 링크 — 공공 우주과학 기관 페이지로 연결
+  // =========================================================
+  const NASA_BODY_URL = {
+    sun:'https://science.nasa.gov/sun/', mercury:'https://science.nasa.gov/mercury/', venus:'https://science.nasa.gov/venus/',
+    earth:'https://science.nasa.gov/earth/', mars:'https://science.nasa.gov/mars/', jupiter:'https://science.nasa.gov/jupiter/',
+    saturn:'https://science.nasa.gov/saturn/', uranus:'https://science.nasa.gov/uranus/', neptune:'https://science.nasa.gov/neptune/',
+    pluto:'https://science.nasa.gov/dwarf-planets/pluto/', eris:'https://science.nasa.gov/dwarf-planets/eris/'};
+  const KASI_URL = 'https://www.kasi.re.kr';
+  function simbadUrl(ident){ return 'https://simbad.cds.unistra.fr/simbad/sim-id?Ident=' + encodeURIComponent(ident); }
+  function exoArchiveUrl(host){ return 'https://exoplanetarchive.ipac.caltech.edu/overview/' + encodeURIComponent(host); }
+  function jplSbdbUrl(name){ return 'https://ssd.jpl.nasa.gov/sbdb.cgi?sstr=' + encodeURIComponent(name); }
+  function hubbleMessierUrl(n){ return `https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-${n}/`; }
+  function linksHtml(list){
+    const items = list.filter(Boolean);
+    if (!items.length) return '';
+    return `<div class="more-links"><div class="more-title">${LL('더 알아보기', 'Learn more')}</div>` +
+      items.map(([label, url]) => `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">${escHtml(label)} ↗</a>`).join('') + '</div>';
+  }
+  function appendLinks(list){
+    const el = document.getElementById('p-desc');
+    el.insertAdjacentHTML('beforeend', linksHtml(list));
+  }
+
+  // =========================================================
+  // 별자리 선 — d3-celestial(BSD-3) 데이터, 고른 별자리만 그려서 잠시 보여줌
+  // =========================================================
+  SKY.conData = null;
+  function loadConLines(){
+    if (SKY.conData) return Promise.resolve(SKY.conData);
+    if (!SKY._conP) SKY._conP = fetch(SKY_DATA_BASE + 'sky-conlines.json').then(r => r.json()).then(j => (SKY.conData = j));
+    return SKY._conP;
+  }
+  const conLineGroup = new THREE.Group();
+  conLineGroup.renderOrder = -8;
+  skyGroup.add(conLineGroup);
+  let conFade = { obj: null, start: 0, hold: 0 };
+  function clearConLines(){
+    while (conLineGroup.children.length){
+      const c = conLineGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material){ if (c.material.map) c.material.map.dispose(); c.material.dispose(); }
+    }
+    conFade.obj = null;
+  }
+  async function showConLines(ci, holdMs){
+    if (ci == null || ci < 0) return;
+    let data;
+    try { data = await loadConLines(); } catch(e){ return; }
+    const c = data[CON_ABBR[ci]];
+    if (!c) return;
+    clearConLines();
+    const pts = [];
+    const a = [0,0,0], b = [0,0,0];
+    c.l.forEach(poly => {
+      for (let k = 0; k < poly.length - 1; k++){
+        radecToScene(poly[k][0], poly[k][1], a, 0);
+        radecToScene(poly[k+1][0], poly[k+1][1], b, 0);
+        const R = SKY_R * 0.995;
+        pts.push(a[0]*R, a[1]*R, a[2]*R, b[0]*R, b[1]*R, b[2]*R);
+      }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({ color: 0x9cc2ff, transparent: true, opacity: 0, depthWrite: false });
+    const lines = new THREE.LineSegments(g, mat);
+    lines.frustumCulled = false; lines.renderOrder = -8;
+    conLineGroup.add(lines);
+    // 별자리 이름표
+    const label = makeLabel(conName(ci), '#bcd4ff', 26);
+    const cdir = [0,0,0]; radecToScene(c.c[0], c.c[1], cdir, 0);
+    label.position.set(cdir[0]*SKY_R*0.98, cdir[1]*SKY_R*0.98, cdir[2]*SKY_R*0.98);
+    label.scale.set(8*45, 2*45, 1);
+    label.material.opacity = 0;
+    conLineGroup.add(label);
+    conFade = { obj: [lines, label], start: performance.now(), hold: holdMs || 15000 };
+  }
+  // 매 프레임: 서서히 나타났다가 일정 시간 뒤 서서히 사라짐
+  function updateConFade(){
+    if (!conFade.obj) return;
+    const t = performance.now() - conFade.start;
+    let o = Math.min(1, t / 900);
+    if (t > conFade.hold) o = Math.max(0, 1 - (t - conFade.hold) / 1500);
+    conFade.obj[0].material.opacity = 0.55 * o;
+    conFade.obj[1].material.opacity = 0.9 * o;
+    if (o <= 0 && t > conFade.hold) clearConLines();
+  }
+
+  // 별자리 정보 패널
+  async function showConstellation(ci){
+    await Promise.all([loadStories(), loadConLines(), loadStarInfo()]);
+    const c = SKY.conData[CON_ABBR[ci]];
+    const info = SKY.starInfo;
+    let bright = -1, nakedEye = 0;
+    for (let k = 0; k < info.length; k++){
+      if (info[k][3] !== ci) continue;
+      if (SKY.stars.mags[k] <= 6) nakedEye++;
+      if (bright < 0) bright = k; // 별은 밝은 순으로 정렬되어 있음
+    }
+    const messier = SKY.deep.data.filter(d => d[7] === ci && d[5]).map(d => 'M' + d[5]).sort((x, y) => parseInt(x.slice(1)) - parseInt(y.slice(1)));
+    let brightName = '';
+    if (bright >= 0){
+      const lb = info[bright][0];
+      const proper = /^[A-Z][a-z]/.test(lb) && !/^(HIP|HD|HYG|Gl|GJ|Wo|NN)\b/.test(lb) && !/^([A-Z][a-z]{1,2})(-?\d)?\s+\w+$/.test(lb) ? lb : '';
+      brightName = `${starDisplayName(lb, proper)} (${SKY.stars.mags[bright].toFixed(1)}${LL('등급','')})`;
+    }
+    const facts = [
+      [LL('영문 이름','Latin name'), CON_EN[ci]],
+      [LL('약어','Abbreviation'), CON_ABBR[ci]],
+      [LL('가장 밝은 별','Brightest star'), brightName],
+      [LL('맨눈에 보이는 별','Naked-eye stars'), LL(`약 ${nakedEye}개`, `~${nakedEye}`)],
+      [LL('메시에 천체','Messier objects'), messier.join(', ')],
+      [LL('한국에서','From Korea'), c ? koreaVisibility(c.c[1]) : ''],
+      [LL('잘 보이는 때','Best seen'), c ? bestSeason(c.c[0], c.c[1]) : '']];
+    document.getElementById('p-discover').style.display = 'none';
+    document.getElementById('p-kind').textContent = LL('별자리', 'CONSTELLATION');
+    document.getElementById('p-name').textContent = conName(ci);
+    document.getElementById('p-en').textContent = `${CON_EN[ci]} · ${CON_ABBR[ci]} · IAU`;
+    document.getElementById('p-facts').innerHTML = facts.filter(f => f[1]).map(f => `<div class="fact-row"><span class="k">${escHtml(f[0])}</span><span class="v">${escHtml(f[1])}</span></div>`).join('');
+    const story = SKY.stories.con[ci] ? storyOf(SKY.stories.con[ci]) : '';
+    document.getElementById('p-desc').innerHTML = paras([story,
+      LL('국제천문연맹(IAU)이 정한 88개 별자리 중 하나. 별자리 선은 별을 이어 그린 모양이고, 실제로는 거리가 제각각인 별들이 같은 방향에 보이는 것.', 'One of the 88 constellations defined by the IAU. The lines are a picture drawn between stars that only appear close together — in reality they lie at very different distances.')]);
+    infoPanel.classList.add('open');
+  }
+
+  // =========================================================
+  // 하늘 방향으로 카메라 돌리기 (태양계가 뒤에 오도록)
+  // =========================================================
+  function lookAtSkyDir(d){
+    const dx = d[0], dy = d[1], dz = d[2];
+    camState.followKey = null; camState.followKind = 'field'; focusedFieldRow = null;
+    camState.goal = new THREE.Vector3(dx*420, dy*420, dz*420); // 카메라가 태양계 바깥(카이퍼 벨트 밖)에서 바깥쪽을 보도록
+    camState.targetRadius = 130;
+    let phi = Math.acos(Math.max(-1, Math.min(1, -dy)));
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+    let theta = Math.atan2(-dz, -dx);
+    theta += Math.PI*2 * Math.round((camState.theta - theta) / (Math.PI*2));
+    camState.targetPhi = phi; camState.targetTheta = theta;
+    if (!skyGroup.visible){ skyGroup.visible = true; if (_skyBtn) _skyBtn.classList.add('active'); }
+  }
+  function dirOf(arr, idx){ return [arr[idx*3], arr[idx*3+1], arr[idx*3+2]]; }
+
+  // =========================================================
+  // 검색
+  // =========================================================
+  const ASTEROID_KO = {Ceres:'케레스',Vesta:'베스타',Pallas:'팔라스',Juno:'주노',Hygiea:'히기에아',Eros:'에로스',Bennu:'베누',Psyche:'프시케',Flora:'플로라',Hebe:'헤베',Metis:'메티스',Astraea:'아스트라이아',Amphitrite:'암피트리테',Eunomia:'에우노미아',Iris:'이리스',Themis:'테미스',Bamberga:'밤베르가',Interamnia:'인테람니아',Davida:'다비다',Sylvia:'실비아',Camilla:'카밀라',Hektor:'헥토르',Patroclus:'파트로클로스',Hilda:'힐다',Chariklo:'카리클로',Chiron:'키론',Pholus:'폴루스',Haumea:'하우메아',Makemake:'마케마케',Sedna:'세드나',Quaoar:'콰오아',Orcus:'오르쿠스',Varuna:'바루나',Ixion:'익시온',Gonggong:'공공',Itokawa:'이토카와',Ryugu:'류구',Apophis:'아포피스',Arrokoth:'아로코스',Didymos:'디디모스',Lutetia:'루테티아',Mathilde:'마틸드',Gaspra:'가스프라',Ida:'이다',Steins:'슈타인스',Dinkinesh:'딩키네시',Donaldjohanson:'도널드조핸슨',Eurybates:'에우리바테스',Polymele:'폴리멜레',Leucus:'레우코스',Orus:'오루스',Lucy:'루시'};
+  function properOf(lb){ return /^[A-Z][a-z]/.test(lb) && !/^(HIP|HD|HYG|Gl|GJ|Wo|NN)\b/.test(lb) && !/^([A-Z][a-z]{1,2})(-?\d)?\s+\w+$/.test(lb) ? lb : ''; }
+  let searchIndex = null;
+  const normQ = s => String(s || '').toLowerCase().replace(/[\s\-_'’.·()]/g, '');
+  async function buildSearchIndex(){
+    if (searchIndex) return searchIndex;
+    await Promise.all([loadStarInfo(), loadStories()]);
+    const out = [];
+    const add = (type, ref, name, sub, keys, prio) => out.push({ type, ref, name, sub, keys: keys.filter(Boolean).map(normQ), prio });
+    add('sun', 'sun', t('sun'), LL('항성','Star'), ['태양','Sun','sol'], 0);
+    BODIES.forEach(b => add('planet', b.key, b.name, LANG === 'ko' ? (b.dwarf ? '왜소행성' : '행성') : (b.dwarf ? 'Dwarf planet' : 'Planet'), [b.name, b.en, b.name_ko], 0));
+    CON_KO.forEach((ko, i) => add('con', i, conName(i), LL('별자리','Constellation'), [ko, ko.replace(/자리$/, ''), CON_EN[i], CON_ABBR[i]], 1));
+    const info = SKY.starInfo;
+    for (let k = 0; k < info.length; k++){
+      const lb = info[k][0];
+      if (/^(HIP|HD|HYG|Gl|GJ|Wo|NN) /.test(lb)) continue;
+      const proper = /^[A-Z][a-z]/.test(lb) && !/^([A-Z][a-z]{1,2})(-?\d)?\s+\w+$/.test(lb) ? lb : '';
+      const name = starDisplayName(lb, proper);
+      add('star', k, name, LL('항성','Star') + (info[k][3] >= 0 ? ' · ' + conName(info[k][3]) : ''), [name, lb, proper && STAR_KO[proper]], proper ? 2 : 4);
+    }
+    SKY.deep.data.forEach((d, k) => {
+      const [id, type, , , , mNum, common] = d;
+      const nice = common ? (LANG === 'ko' ? (DSO_KO[common] || common) : common) : '';
+      const name = nice || (mNum ? `M${mNum}` : id);
+      add('deep', k, name, (LANG === 'ko' ? DSO_TYPE_KO : DSO_TYPE_EN)[type] + (mNum ? ` · M${mNum}` : '') + (name !== id ? ` · ${id}` : ''),
+        [name, id, mNum && `M${mNum}`, mNum && `messier${mNum}`, common, DSO_KO[common]], mNum ? 2 : (common ? 3 : 5));
+    });
+    SKY.exo.data.forEach((e, k) => add('exo', k, e[0], LL(`외계행성계 · 행성 ${e[6].length}개`, `Exoplanet system · ${e[6].length} planets`), [e[0]], 4));
+    ASTEROID_DATA.forEach(r => { const ko = ASTEROID_KO[r[0]];
+      add('asteroid', r[0], (LANG === 'ko' && ko) ? `${ko} (${r[0]})` : r[0], LL('소행성','Asteroid') + ' · ' + (GROUP_LABEL[r[8]] || ''), [r[0], ko], heroSet.has(r[0]) ? 2 : 4); });
+    searchIndex = out;
+    return out;
+  }
+  function runSearch(q){
+    const n = normQ(q);
+    if (!n || !searchIndex) return [];
+    // HIP 번호 직접 검색
+    const hip = /^hip(\d+)$/.exec(n);
+    const res = [];
+    if (hip && SKY.starInfo){
+      const h = parseInt(hip[1]);
+      const k = SKY.starInfo.findIndex(r => r[6] === h);
+      if (k >= 0) res.push({ e: { type:'star', ref:k, name: starDisplayName(SKY.starInfo[k][0], properOf(SKY.starInfo[k][0])), sub: `HIP ${h}` }, s: 0 });
+    }
+    for (const e of searchIndex){
+      let best = 9;
+      for (const key of e.keys){
+        if (key === n){ best = 0; break; }
+        if (key.startsWith(n)) best = Math.min(best, 1);
+        else if (n.length >= 2 && key.includes(n)) best = Math.min(best, 2);
+      }
+      if (best < 9) res.push({ e, s: best * 10 + e.prio });
+    }
+    res.sort((x, y) => x.s - y.s || x.e.name.length - y.e.name.length);
+    return res.slice(0, 40).map(r => r.e);
+  }
+  function goToResult(e){
+    closeSearch();
+    if (e.type === 'sun') { skyMarker.visible = false; focusOnBody('sun', 'sun'); return; }
+    if (e.type === 'planet') { skyMarker.visible = false; focusOnBody('planet', e.ref); return; }
+    if (e.type === 'asteroid'){
+      skyMarker.visible = false; camState.goal = null;
+      if (asteroidMeshes[e.ref]) { focusOnBody('asteroid', e.ref); return; }
+      const idx = fieldRows.findIndex(r => r[0] === e.ref);
+      if (idx >= 0){
+        const pa = fieldGeo.attributes.position.array;
+        focusOnField(fieldRows[idx], new THREE.Vector3(pa[idx*3], pa[idx*3+1], pa[idx*3+2]));
+      }
+      return;
+    }
+    if (e.type === 'con'){
+      loadConLines().then(data => {
+        const c = data[CON_ABBR[e.ref]]; if (!c) return;
+        const d = [0,0,0]; radecToScene(c.c[0], c.c[1], d, 0);
+        skyMarker.visible = false;
+        lookAtSkyDir(d);
+        showConLines(e.ref, 20000);
+        showConstellation(e.ref);
+      });
+      return;
+    }
+    const layer = e.type, arr = layer === 'star' ? SKY.stars.dirs : layer === 'deep' ? SKY.deep.dirs : SKY.exo.dirs;
+    lookAtSkyDir(dirOf(arr, e.ref));
+    showSkyObject({ layer, idx: e.ref });
+  }
+
+  const searchPanel = document.getElementById('search-panel');
+  const searchInput = document.getElementById('search-input');
+  const searchList = document.getElementById('search-results');
+  function renderResults(){
+    const r = runSearch(searchInput.value);
+    if (!searchInput.value.trim()){
+      searchList.innerHTML = `<div class="search-hint">${LL('예: 시리우스, 안드로메다, 오리온자리, M42, 토성, 케레스, TRAPPIST-1, HIP 32349', 'e.g. Sirius, Andromeda, Orion, M42, Saturn, Ceres, TRAPPIST-1, HIP 32349')}</div>`;
+      return;
+    }
+    if (!r.length){ searchList.innerHTML = `<div class="search-hint">${LL('찾는 천체 없음', 'No matches')}</div>`; return; }
+    searchList.innerHTML = r.map((e, i) => `<button class="search-item" data-i="${i}"><span class="n">${escHtml(e.name)}</span><span class="s">${escHtml(e.sub)}</span></button>`).join('');
+    searchList._results = r;
+  }
+  async function openSearch(){
+    searchPanel.classList.add('open');
+    searchInput.value = '';
+    searchList.innerHTML = `<div class="search-hint">${LL('천체 목록 불러오는 중…', 'Loading objects…')}</div>`;
+    setTimeout(() => searchInput.focus(), 50);
+    try { await buildSearchIndex(); } catch(e){ searchList.innerHTML = `<div class="search-hint">${LL('목록을 불러오지 못함', 'Could not load the list')}</div>`; return; }
+    renderResults();
+  }
+  function closeSearch(){ searchPanel.classList.remove('open'); searchInput.blur(); }
+  let searchTimer = null;
+  searchInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderResults, 120); });
+  searchInput.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter'){ const r = searchList._results; if (r && r.length) goToResult(r[0]); }
+    if (ev.key === 'Escape') closeSearch();
+  });
+  searchList.addEventListener('click', ev => {
+    const b = ev.target.closest('.search-item'); if (!b) return;
+    const r = searchList._results; if (r) goToResult(r[+b.dataset.i]);
+  });
+  document.getElementById('btn-search').addEventListener('click', openSearch);
+  document.getElementById('btn-close-search').addEventListener('click', closeSearch);
+  searchInput.placeholder = LL('천체 이름 검색 (한글·영어)', 'Search objects');
+  document.getElementById('btn-search').textContent = LL('🔍 검색', '🔍 Search');
+
   updateObjectCount();
   loadSky();
 
@@ -5199,6 +5517,8 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
       camState.target.lerp(bodyMeshes[camState.followKey].position, 0.08);
     } else if (camState.followKind === 'asteroid'){
       camState.target.lerp(asteroidMeshes[camState.followKey].position, 0.08);
+    } else if (camState.followKind === 'field' && camState.goal) {
+      camState.target.lerp(camState.goal, 0.16);
     } else if (camState.followKind !== 'field') {
       camState.target.lerp(new THREE.Vector3(0,0,0), 0.08);
     }
@@ -5208,6 +5528,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     camState.radius += (camState.targetRadius - camState.radius) * 0.08;
     updateCameraFromSpherical();
     skyGroup.position.copy(camera.position);
+    updateConFade();
     // 태양 글로우: 가까이서 태양 쪽을 보면 화면 전체가 노랗게 덮이던 문제 -> 거리에 따라 흐리게
     if (window.__sunGlow){
       const dSun = camera.position.distanceTo(sunMesh.position);

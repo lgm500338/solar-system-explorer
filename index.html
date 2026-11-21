@@ -286,6 +286,7 @@
     <div id="title-block">
       <div id="title-row"><h1>우주로</h1><button id="btn-lang" type="button">English</button></div>
       <p id="date-readout">SIM T+0.0y</p>
+      <p id="obj-count" style="margin:2px 0 0;font-size:11px;letter-spacing:.04em;opacity:.72"></p>
     </div>
   </div>
 
@@ -295,6 +296,7 @@
     <button class="hud-btn" id="btn-log">발견 일지</button>
     <button class="hud-btn" id="btn-diary">다이어리</button>
     <button class="hud-btn" id="btn-sound">🔇 소리</button>
+    <button class="hud-btn" id="btn-skylayer">🌌 별·은하</button>
     <button class="hud-btn" id="btn-overview">전체보기</button>
     <button class="hud-btn" id="btn-pause">일시정지</button>
   </div>
@@ -3353,7 +3355,9 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, sizeAttenuation: false, transparent: true, opacity: 0.85 });
-    scene.add(new THREE.Points(geo, mat));
+    const pts = new THREE.Points(geo, mat);
+    window.__fakeStarfield = pts; // 실제 하늘 데이터가 로드되면 숨김(로드 실패 시 대체용)
+    scene.add(pts);
   }
   buildStarfield();
 
@@ -3690,6 +3694,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     const hits = raycaster.intersectObjects(solidMeshes, false);
     if (hits.length){
       const ud = hits[0].object.userData;
+      skyMarker.visible = false;
       focusOnBody(ud.kind, ud.key);
       return;
     }
@@ -3698,8 +3703,13 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     if (fieldHits.length){
       const idx = fieldHits[0].index;
       const row = fieldRows[idx];
+      skyMarker.visible = false;
       focusOnField(row, fieldHits[0].point);
+      return;
     }
+    // 실제 밤하늘(별·은하·외계행성계) 클릭 검사
+    const skyHit = skyPick();
+    if (skyHit) showSkyObject(skyHit);
   }
 
   function focusOnBody(kind, key){
@@ -3739,6 +3749,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     camState.followKey = null; camState.followKind = null; focusedFieldRow = null;
     camState.target.set(0,0,0);
     camState.targetTheta = 0.9; camState.targetPhi = 1.05; camState.targetRadius = 130;
+    skyMarker.visible = false;
     closeInfoPanel();
   });
 
@@ -3771,6 +3782,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     const aphelion = (a*(1+e)).toFixed(2);
     const periodYears = Math.pow(a, 1.5).toFixed(1);
     document.getElementById('p-discover').style.display = isHero ? 'none' : 'inline-block';
+    document.getElementById('p-discover').textContent = LANG === 'ko' ? '✦ 지금 발견한 소행성' : '✦ Just discovered asteroid';
     document.getElementById('p-kind').textContent = GROUP_LABEL[group] || t('asteroid');
     document.getElementById('p-name').textContent = name;
     document.getElementById('p-en').textContent = 'Asteroid · IAU MPC data';
@@ -3809,8 +3821,452 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   function closeInfoPanel(){ infoPanel.classList.remove('open'); }
   document.getElementById('btn-close-panel').addEventListener('click', () => {
     closeInfoPanel();
+    skyMarker.visible = false;
     camState.followKey = null; camState.followKind = null; focusedFieldRow = null;
   });
+
+  // =========================================================
+  // 실제 밤하늘 레이어 — 별(HYG v4.1) · 은하/성운/성단(OpenNGC) · 외계행성계(Open Exoplanet Catalogue)
+  // 실제 적경·적위 위치에 배치. 평소엔 빛나는 점, 클릭하는 순간 이름과 정보 공개. 외부 API 없음.
+  // =========================================================
+  const SKY_R = 1500;                       // 카메라를 감싸는 하늘 구 반지름
+  const skyGroup = new THREE.Group();       // 매 프레임 카메라 위치로 이동(무한히 먼 하늘)
+  skyGroup.renderOrder = -10;
+  scene.add(skyGroup);
+  const OBLIQ_SKY = 23.4393 * DEG2RAD;
+  // 적경/적위(도) -> 씬 좌표 단위벡터. 행성 궤도와 같은 규칙: 황도 (X,Y,Z) -> three (X, Z, Y)
+  function radecToScene(raDeg, decDeg, out, o){
+    const ra = raDeg*DEG2RAD, dec = decDeg*DEG2RAD;
+    const x = Math.cos(dec)*Math.cos(ra), y = Math.cos(dec)*Math.sin(ra), z = Math.sin(dec);
+    const Y = y*Math.cos(OBLIQ_SKY) + z*Math.sin(OBLIQ_SKY);
+    const Z = -y*Math.sin(OBLIQ_SKY) + z*Math.cos(OBLIQ_SKY);
+    out[o] = x; out[o+1] = Z; out[o+2] = Y;
+  }
+
+  const CON_KO = ['안드로메다자리','공기펌프자리','극락조자리','독수리자리','물병자리','제단자리','양자리','마차부자리','목동자리','큰개자리','작은개자리','사냥개자리','조각칼자리','기린자리','염소자리','용골자리','카시오페이아자리','센타우루스자리','케페우스자리','고래자리','카멜레온자리','컴퍼스자리','게자리','비둘기자리','머리털자리','남쪽왕관자리','북쪽왕관자리','컵자리','남십자자리','까마귀자리','백조자리','돌고래자리','황새치자리','용자리','조랑말자리','에리다누스자리','화로자리','쌍둥이자리','두루미자리','헤르쿨레스자리','시계자리','바다뱀자리','물뱀자리','인디언자리','작은사자자리','도마뱀자리','사자자리','토끼자리','천칭자리','이리자리','살쾡이자리','거문고자리','테이블산자리','현미경자리','외뿔소자리','파리자리','직각자자리','팔분의자리','뱀주인자리','오리온자리','공작자리','페가수스자리','페르세우스자리','봉황새자리','화가자리','남쪽물고기자리','물고기자리','고물자리','나침반자리','그물자리','조각가자리','전갈자리','방패자리','뱀자리','육분의자리','화살자리','궁수자리','황소자리','망원경자리','남쪽삼각형자리','삼각형자리','큰곰자리','작은곰자리','돛자리','처녀자리','날치자리','여우자리'];
+  const CON_EN = ['Andromeda','Antlia','Apus','Aquila','Aquarius','Ara','Aries','Auriga','Boötes','Canis Major','Canis Minor','Canes Venatici','Caelum','Camelopardalis','Capricornus','Carina','Cassiopeia','Centaurus','Cepheus','Cetus','Chamaeleon','Circinus','Cancer','Columba','Coma Berenices','Corona Australis','Corona Borealis','Crater','Crux','Corvus','Cygnus','Delphinus','Dorado','Draco','Equuleus','Eridanus','Fornax','Gemini','Grus','Hercules','Horologium','Hydra','Hydrus','Indus','Leo Minor','Lacerta','Leo','Lepus','Libra','Lupus','Lynx','Lyra','Mensa','Microscopium','Monoceros','Musca','Norma','Octans','Ophiuchus','Orion','Pavo','Pegasus','Perseus','Phoenix','Pictor','Piscis Austrinus','Pisces','Puppis','Pyxis','Reticulum','Sculptor','Scorpius','Scutum','Serpens','Sextans','Sagitta','Sagittarius','Taurus','Telescopium','Triangulum Australe','Triangulum','Ursa Major','Ursa Minor','Vela','Virgo','Volans','Vulpecula'];
+  const CON_ABBR = ['And','Ant','Aps','Aql','Aqr','Ara','Ari','Aur','Boo','CMa','CMi','CVn','Cae','Cam','Cap','Car','Cas','Cen','Cep','Cet','Cha','Cir','Cnc','Col','Com','CrA','CrB','Crt','Cru','Crv','Cyg','Del','Dor','Dra','Equ','Eri','For','Gem','Gru','Her','Hor','Hya','Hyi','Ind','LMi','Lac','Leo','Lep','Lib','Lup','Lyn','Lyr','Men','Mic','Mon','Mus','Nor','Oct','Oph','Ori','Pav','Peg','Per','Phe','Pic','PsA','Psc','Pup','Pyx','Ret','Scl','Sco','Sct','Ser','Sex','Sge','Sgr','Tau','Tel','TrA','Tri','UMa','UMi','Vel','Vir','Vol','Vul'];
+  function conName(i){ return i >= 0 ? (LANG === 'ko' ? CON_KO[i] : CON_EN[i]) : '-'; }
+  const GREEK = {Alp:'α',Bet:'β',Gam:'γ',Del:'δ',Eps:'ε',Zet:'ζ',Eta:'η',The:'θ',Iot:'ι',Kap:'κ',Lam:'λ',Mu:'μ',Nu:'ν',Xi:'ξ',Omi:'ο',Pi:'π',Rho:'ρ',Sig:'σ',Tau:'τ',Ups:'υ',Phi:'φ',Chi:'χ',Psi:'ψ',Ome:'ω'};
+  const STAR_KO = {Sirius:'시리우스',Canopus:'카노푸스',Arcturus:'아크투르스',Vega:'베가 (직녀성)',Capella:'카펠라',Rigel:'리겔',Procyon:'프로키온',Betelgeuse:'베텔게우스',Achernar:'아케르나르',Hadar:'하다르',Altair:'알타이르 (견우성)',Acrux:'아크룩스',Aldebaran:'알데바란',Antares:'안타레스',Spica:'스피카',Pollux:'폴룩스',Fomalhaut:'포말하우트',Deneb:'데네브',Mimosa:'미모사',Regulus:'레굴루스',Adhara:'아다라',Castor:'카스토르',Shaula:'샤울라',Gacrux:'가크룩스',Bellatrix:'벨라트릭스',Elnath:'엘나트',Miaplacidus:'미아플라키두스',Alnilam:'알닐람',Alnitak:'알니탁',Mintaka:'민타카',Alioth:'알리오트',Dubhe:'두베',Mirfak:'미르팍',Polaris:'폴라리스 (북극성)','Rigil Kentaurus':'리길 켄타우루스 (알파 센타우리)',Toliman:'톨리만','Proxima Centauri':'프록시마 센타우리',Alkaid:'알카이드',Mizar:'미자르',Alcor:'알코르',Algol:'알골',Merak:'메라크',Phecda:'펙다',Megrez:'메그레즈',Saiph:'사이프',Denebola:'데네볼라',Albireo:'알비레오',Thuban:'투반',"Barnard's Star":'바너드별',Kochab:'코카브',Mira:'미라',Rasalhague:'라스알하게',Alphard:'알파르드',Hamal:'하말',Alpheratz:'알페라츠',Markab:'마르카브',Scheat:'쉐아트',Enif:'에니프',Sadr:'사드르',Schedar:'쉐다르',Caph:'카프',Algieba:'알기에바',Menkalinan:'멘칼리난',Alhena:'알헤나',Wezen:'웨젠',Alcyone:'알키오네',Electra:'엘렉트라',Maia:'마이아',Atlas:'아틀라스',Merope:'메로페',Taygeta:'타이게타',Pleione:'플레이오네',Avior:'아비오르',Peacock:'피콕',Sargas:'사르가스',Kaus:'카우스',Nunki:'눙키',Menkar:'멘카르',Diphda:'디프다',Mirach:'미라크',Almach:'알마크',Izar:'이자르',Vindemiatrix:'빈데미아트릭스',Zubenelgenubi:'주벤엘게누비',Eltanin:'엘타닌',Rasalgethi:'라스알게티',Sheliak:'셸리악',Sulafat:'술라파트',Tarazed:'타라제드',Alderamin:'알데라민',Errai:'에라이',Gienah:'기에나',Unukalhai:'우눅알하이',Kornephoros:'코르네포로스'};
+  const DSO_KO = {'Pleiades':'플레이아데스 성단 (좀생이별)','Beehive':'벌집 성단 (프레세페)',"Ptolemy's Cluster":'프톨레마이오스 성단','Andromeda Galaxy':'안드로메다 은하','Great Orion Nebula':'오리온 대성운','Butterfly Cluster':'나비 성단','Small Sgr Star Cloud':'궁수자리 작은 별구름','Triangulum Galaxy':'삼각형자리 은하','Hercules Globular Cluster':'헤르쿨레스 구상성단','Lagoon Nebula':'석호 성운',"Amas de l'Ecu de Sobieski":'들오리 성단','Eagle Nebula':'독수리 성운',"Bode's Galaxy":'보데 은하','Checkmark Nebula':'오메가 성운','Southern Pinwheel Galaxy':'남쪽 바람개비 은하','Dumbbell Nebula':'아령 성운','Cigar Galaxy':'시가 은하','Crab Nebula':'게 성운','Whirlpool Galaxy':'소용돌이 은하','Black Eye Galaxy':'검은 눈 은하','Trifid Nebula':'삼렬 성운','Sombrero Galaxy':'솜브레로 은하','Sunflower Galaxy':'해바라기 은하','Ring Nebula':'고리 성운',"Mairan's Nebula":'드 메랑 성운','Virgo Galaxy':'처녀자리 A 은하 (M87)','Coma Pinwheel':'머리털자리 바람개비 은하','Owl Nebula':'올빼미 성운','Barbell Nebula':'작은 아령 성운','Large Magellanic Cloud':'대마젤란 은하','Small Magellanic Cloud':'소마젤란 은하','Carina Nebula':'용골자리 성운','Wishing Well Cluster':'소원의 우물 성단','h Persei Cluster':'페르세우스 h 성단','chi Persei Cluster':'페르세우스 χ 성단','Christmas Tree Cluster':'크리스마스 트리 성단','North America Nebula':'북아메리카 성운','47 Tuc Cluster':'큰부리새자리 47 구상성단','California Nebula':'캘리포니아 성운','Omega Centauri':'오메가 센타우리 구상성단','Rosette Nebula':'장미 성운','Owl Cluster':'올빼미 성단','Veil Nebula':'베일 성운','Eastern Veil':'동쪽 베일 성운','Cocoon Nebula':'누에고치 성운','Centaurus A':'센타우루스 A 은하','Iris Nebula':'붓꽃 성운','Helix Nebula':'나선 성운 (신의 눈)','Crescent Nebula':'초승달 성운',"Jupiter's Ghost Nebula":'목성의 유령 성운','Pelican Nebula':'펠리컨 성운','Saturn Nebula':'토성 성운',"Cat's Eye Nebula":'고양이 눈 성운','Spindle Galaxy':'방추 은하','Fireworks Galaxy':'불꽃놀이 은하','Whale Galaxy':'고래 은하','Eskimo Nebula':'에스키모 성운','Bug Nebula':'벌레 성운','Flaming Star Nebula':'불타는 별 성운',"Barnard's Galaxy":'바너드 은하','Antennae Galaxies':'더듬이 은하','Needle Galaxy':'바늘 은하','Bubble Nebula':'거품 성운','Red Spider Nebula':'붉은 거미 성운','Flame Nebula':'불꽃 성운','Monkey Head Nebula':'원숭이 머리 성운','Mice Galaxy':'생쥐 은하',"Herschel's Jewel Box":'보석상자 성단','the Witch Head Nebula':'마녀 머리 성운','the Running Man Nebula':'달리는 사람 성운','Horsehead Nebula':'말머리 성운','Cave Nebula':'동굴 성운','Double Cluster':'페르세우스 이중성단','Hyades':'히아데스 성단','Coalsack Nebula':'석탄자루 성운',"Stephan's Quintet":'스테판의 오중주',"Seyfert's Sextet":'세이퍼트의 육중주','Coma Star Cluster':'머리털자리 성단',"Brocchi's Cluster":'옷걸이 성단','Pencil Nebula':'연필 성운','Pearl Cluster':'진주 성단','Sculptor Dwarf Elliptical':'조각가자리 왜소 타원은하','Fornax Dwarf Spheroidal':'화로자리 왜소 은하','Leo I':'사자자리 I 왜소은하','Wolf-Lundmark-Melotte':'WLM 은하','Circinus Galaxy':'컴퍼스자리 은하','Umbrella Galaxy':'우산 은하','Butterfly Galaxies':'나비 은하','Medusa Galaxy Merger':'메두사 은하','Little Gem Nebula':'작은 보석 성운','Blinking Planetary':'깜빡이 성운','Blue Planetary':'푸른 행성상성운',"Copeland's Blue Snowball":'푸른 눈덩이 성운','Bow-Tie nebula':'나비넥타이 성운'};
+  const DSO_TYPE_KO = ['은하','산개성단','구상성단','성운','행성상성운','초신성 잔해'];
+  const DSO_TYPE_EN = ['Galaxy','Open cluster','Globular cluster','Nebula','Planetary nebula','Supernova remnant'];
+  const DSO_TYPE_DESC_KO = [
+    '수천억 개의 별이 모인 또 하나의 은하예요. 우리은하 바깥, 아주 먼 곳에 있어요.',
+    '같은 가스 구름에서 함께 태어난 젊은 별들의 무리예요. 시간이 지나면 서서히 흩어져요.',
+    '수십만 개의 아주 늙은 별들이 공처럼 빽빽하게 뭉친 성단이에요. 우리은하에서 가장 오래된 천체 중 하나예요.',
+    '가스와 먼지로 이루어진 구름이에요. 이런 곳에서 새로운 별이 태어나요.',
+    '태양 같은 별이 생의 마지막에 바깥 껍질을 우주로 내보내며 만든 빛나는 가스예요. 먼 미래 태양의 모습이기도 해요.',
+    '무거운 별이 초신성으로 폭발한 뒤 남은 잔해예요. 우리 몸을 이루는 원소들도 이런 폭발에서 만들어졌어요.'];
+  const DSO_TYPE_DESC_EN = [
+    'Another galaxy of hundreds of billions of stars, far beyond our Milky Way.',
+    'A family of young stars born together from the same gas cloud. Over time they slowly drift apart.',
+    'Hundreds of thousands of very old stars packed into a ball, among the oldest things in our galaxy.',
+    'A cloud of gas and dust. New stars are born in places like this.',
+    'Glowing gas thrown off by a Sun-like star at the end of its life — a glimpse of our Sun’s far future.',
+    'What is left after a massive star exploded as a supernova. The elements in our bodies were forged in blasts like this.'];
+  const DSO_KNOWN_LY = {'NGC 224':2.5e6,'NGC 598':2.73e6,'NGC 221':2.49e6,'NGC 205':2.69e6,'ESO056-115':1.6e5,'NGC 292':2.0e5,'NGC 3031':1.18e7,'NGC 3034':1.14e7,'NGC 5194':2.3e7,'NGC 4594':2.9e7,'NGC 5128':1.2e7,'NGC 6822':1.6e6,'PGC000143':3.0e6,'ESO351-030':2.9e5,'ESO356-004':4.6e5,'UGC05470':8.2e5,'NGC 253':1.14e7};
+  const EXO_METHOD = {transit:['통과법(트랜짓)','transit'],RV:['시선속도법','radial velocity'],imaging:['직접 촬영','direct imaging'],microlensing:['미세중력렌즈','microlensing'],timing:['타이밍 측정','timing']};
+
+  // 빛이 출발한 때 -> 지구의 어떤 시대였는지
+  function eraOfYear(y){
+    if (y >= 1945) return LANG === 'ko' ? '광복 이후' : '';
+    if (y >= 1910) return LANG === 'ko' ? '일제강점기' : '';
+    if (y >= 1897) return LANG === 'ko' ? '대한제국' : '';
+    if (y >= 1392) return LANG === 'ko' ? '조선 시대' : '';
+    if (y >= 918) return LANG === 'ko' ? '고려 시대' : '';
+    if (y >= 676) return LANG === 'ko' ? '통일신라 시대' : '';
+    if (y >= -57) return LANG === 'ko' ? '삼국 시대' : '';
+    if (y >= -2333) return LANG === 'ko' ? '고조선 시대' : '';
+    return '';
+  }
+  function lightStory(ly){
+    if (!ly || ly <= 0) return '';
+    const now = new Date().getFullYear();
+    if (ly < 1) return LANG === 'ko' ? '' : '';
+    if (ly <= 4300){
+      const y = Math.round(now - ly);
+      const yStr = LANG === 'ko' ? (y < 0 ? `기원전 ${-y}년` : `${y}년`) : (y < 0 ? `${-y} BC` : `${y}`);
+      const era = eraOfYear(y);
+      return LANG === 'ko'
+        ? `지금 보이는 이 빛은 약 ${fmtNum(ly)}년 전, ${yStr} 무렵${era ? '(' + era + ')' : ''}에 출발해 오늘 밤 당신의 눈에 닿았어요.`
+        : `The light you see now left about ${fmtNum(ly)} years ago, around ${yStr}, and reaches your eyes tonight.`;
+    }
+    const eras = [
+      [12000, '농사가 막 시작되던 신석기 시대', 'when farming was just beginning'],
+      [300000, '빙하기, 인류가 동굴에 그림을 그리던 시대', 'during the Ice Age, when humans painted caves'],
+      [3300000, '인류의 조상이 처음 돌 도구를 쓰기 시작할 무렵', 'when our ancestors first picked up stone tools'],
+      [66000000, '공룡이 사라진 뒤 포유류가 퍼져 나가던 시대', 'after the dinosaurs, as mammals spread across Earth'],
+      [252000000, '공룡이 지구를 누비던 시대', 'when dinosaurs roamed the Earth'],
+      [541000000, '바다에 첫 동물들이 생겨나던 시대', 'when the first animals appeared in the seas'],
+      [4600000000, '지구에 단세포 생물만 살던 시대', 'when only single-celled life lived on Earth'],
+      [Infinity, '태양과 지구가 태어나기도 전', 'before the Sun and Earth were even born']];
+    const e = eras.find(x => ly < x[0]);
+    return LANG === 'ko'
+      ? `이 빛은 약 ${fmtLy(ly)} 전, ${e[1]}에 출발했어요. 우리는 지금 그 시절의 모습을 보고 있어요.`
+      : `This light set out about ${fmtLy(ly)} ago, ${e[2]}. We are seeing it as it was back then.`;
+  }
+  function fmtNum(n){ return Math.round(n).toLocaleString(LOCALE); }
+  function fmtLy(ly){
+    if (LANG === 'ko'){
+      if (ly >= 1e8) return `${(ly/1e8).toFixed(ly >= 1e9 ? 0 : 1)}억 년`;
+      if (ly >= 1e4) return `${fmtNum(ly/1e4)}만 년`;
+      return `${fmtNum(ly)}년`;
+    }
+    if (ly >= 1e9) return `${(ly/1e9).toFixed(1)} billion years`;
+    if (ly >= 1e6) return `${(ly/1e6).toFixed(1)} million years`;
+    return `${fmtNum(ly)} years`;
+  }
+  function fmtDistLy(ly){
+    if (!ly) return LANG === 'ko' ? '정밀 측정 전' : 'not yet measured';
+    if (LANG === 'ko'){
+      if (ly >= 1e8) return `약 ${(ly/1e8).toFixed(1)}억 광년`;
+      if (ly >= 1e4) return `약 ${fmtNum(ly/1e4)}만 광년`;
+      return `약 ${ly < 10 ? ly.toFixed(2) : fmtNum(ly)} 광년`;
+    }
+    if (ly >= 1e9) return `~${(ly/1e9).toFixed(2)} billion ly`;
+    if (ly >= 1e6) return `~${(ly/1e6).toFixed(1)} million ly`;
+    return `~${ly < 10 ? ly.toFixed(2) : fmtNum(ly)} ly`;
+  }
+  function escHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // B-V 색지수 -> 별빛 색 (흑체 온도 근사)
+  function bvToTemp(bv){ return 4600 * (1/(0.92*bv + 1.7) + 1/(0.92*bv + 0.62)); }
+  function tempToRGB(T, out, o){
+    const t = T/100; let r, g, b;
+    if (t <= 66){ r = 255; g = 99.47*Math.log(t) - 161.12; b = t <= 19 ? 0 : 138.52*Math.log(t-10) - 305.04; }
+    else { r = 329.7*Math.pow(t-60, -0.1332); g = 288.12*Math.pow(t-60, -0.0755); b = 255; }
+    // 너무 진하지 않게 흰색 쪽으로 살짝 섞음
+    out[o]   = (Math.min(255, Math.max(0, r))/255)*0.75 + 0.25;
+    out[o+1] = (Math.min(255, Math.max(0, g))/255)*0.75 + 0.25;
+    out[o+2] = (Math.min(255, Math.max(0, b))/255)*0.75 + 0.25;
+  }
+  function spectDesc(sp){
+    const c = (sp || '').trim().charAt(0).toUpperCase();
+    const ko = {O:'푸른빛 · 약 30,000°C 이상',B:'청백색 · 약 10,000~30,000°C',A:'흰색 · 약 7,500~10,000°C',F:'노란 흰색 · 약 6,000~7,500°C',G:'노란색 · 약 5,200~6,000°C (태양과 같은 종류)',K:'주황색 · 약 3,700~5,200°C',M:'붉은색 · 약 2,400~3,700°C'};
+    const en = {O:'blue · above ~30,000°C',B:'blue-white · ~10,000–30,000°C',A:'white · ~7,500–10,000°C',F:'yellow-white · ~6,000–7,500°C',G:'yellow · ~5,200–6,000°C (same type as the Sun)',K:'orange · ~3,700–5,200°C',M:'red · ~2,400–3,700°C'};
+    return (LANG === 'ko' ? ko : en)[c] || '';
+  }
+
+  // ---------- 셰이더: 크기·밝기·색이 점마다 다른 빛 ----------
+  const SKY_VS = `
+    attribute float aSize; attribute float aAlpha; attribute vec3 aColor;
+    uniform float uPR; varying float vAlpha; varying vec3 vColor;
+    void main(){
+      vAlpha = aAlpha; vColor = aColor;
+      gl_PointSize = aSize * uPR;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`;
+  const STAR_FS = `
+    varying float vAlpha; varying vec3 vColor;
+    void main(){
+      vec2 c = gl_PointCoord - 0.5; float d = length(c);
+      if (d > 0.5) discard;
+      float core = smoothstep(0.5, 0.0, d);
+      gl_FragColor = vec4(vColor, vAlpha * core * core * 1.4);
+    }`;
+  const GLOW_FS = `
+    varying float vAlpha; varying vec3 vColor;
+    void main(){
+      vec2 c = gl_PointCoord - 0.5; float d = length(c);
+      if (d > 0.5) discard;
+      float g = exp(-d*d*14.0);
+      gl_FragColor = vec4(vColor, vAlpha * g);
+    }`;
+  const RING_FS = `
+    varying float vAlpha; varying vec3 vColor;
+    void main(){
+      vec2 c = gl_PointCoord - 0.5; float d = length(c);
+      float ring = smoothstep(0.14, 0.0, abs(d - 0.32));
+      float dot = smoothstep(0.12, 0.0, d);
+      float a = max(ring, dot);
+      if (a < 0.02) discard;
+      gl_FragColor = vec4(vColor, vAlpha * a);
+    }`;
+  const skyUniforms = { uPR: { value: renderer.getPixelRatio() } };
+  function makeSkyMaterial(fs){
+    return new THREE.ShaderMaterial({ uniforms: skyUniforms, vertexShader: SKY_VS, fragmentShader: fs,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  }
+  function makeSkyPoints(dirs, sizes, alphas, colors, fs){
+    const n = sizes.length, pos = new Float32Array(n*3);
+    for (let k = 0; k < n*3; k++) pos[k] = dirs[k] * SKY_R;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    g.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+    g.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), SKY_R*1.01);
+    const p = new THREE.Points(g, makeSkyMaterial(fs));
+    p.frustumCulled = false; p.renderOrder = -10;
+    skyGroup.add(p);
+    return p;
+  }
+
+  const SKY = { stars: null, deep: null, exo: null, starInfo: null, ready: false };
+  const SKY_DATA_BASE = 'data/';
+
+  async function loadSky(){
+    try {
+      const [binRes, deepRes, exoRes] = await Promise.all([
+        fetch(SKY_DATA_BASE + 'sky-stars.b64.txt'), fetch(SKY_DATA_BASE + 'sky-deep.json'), fetch(SKY_DATA_BASE + 'sky-exo.json')]);
+      if (!binRes.ok || !deepRes.ok || !exoRes.ok) throw new Error('sky data http');
+      const b64 = (await binRes.text()).trim();
+      const raw = atob(b64), bytes = new Uint8Array(raw.length);
+      for (let k = 0; k < raw.length; k++) bytes[k] = raw.charCodeAt(k);
+      const buf = bytes.buffer;
+      const deep = await deepRes.json();
+      const exo = await exoRes.json();
+
+      // --- 별 ---
+      const dv = new DataView(buf), n = Math.floor(buf.byteLength / 6);
+      const dirs = new Float32Array(n*3), sizes = new Float32Array(n), alphas = new Float32Array(n), colors = new Float32Array(n*3), mags = new Float32Array(n);
+      for (let k = 0; k < n; k++){
+        const ra = dv.getUint16(k*6, true) / 65535 * 360;
+        const dec = dv.getInt16(k*6+2, true) / 32767 * 90;
+        const mag = dv.getUint8(k*6+4) / 10 - 2;
+        const bv = dv.getUint8(k*6+5) / 80 - 0.5;
+        radecToScene(ra, dec, dirs, k*3);
+        mags[k] = mag;
+        sizes[k] = Math.max(1.6, Math.min(9, 7.2 - 0.85*mag));
+        alphas[k] = mag <= 4 ? 1.0 : Math.max(0.10, 1.0 - (mag - 4)*0.14);
+        tempToRGB(bvToTemp(bv), colors, k*3);
+      }
+      SKY.stars = { n, dirs, mags, points: makeSkyPoints(dirs, sizes, alphas, colors, STAR_FS) };
+
+      // --- 은하·성운·성단 ---
+      const DSO_COLOR = [[1.0,0.78,0.62],[0.66,0.8,1.0],[1.0,0.9,0.62],[1.0,0.5,0.68],[0.45,0.92,1.0],[0.85,0.6,1.0]];
+      const m = deep.length, dd = new Float32Array(m*3), ds = new Float32Array(m), da = new Float32Array(m), dc = new Float32Array(m*3);
+      for (let k = 0; k < m; k++){
+        const [name, type, ra, dec, mag, mNum, common, con, majAx] = deep[k];
+        radecToScene(ra, dec, dd, k*3);
+        const big = majAx ? Math.log2(1 + majAx) : 0.5;
+        ds[k] = Math.max(4, Math.min(30, 4 + big*2.6)) * (mNum ? 1.35 : 1);
+        const mg = (mag == null) ? 13.5 : mag;
+        da[k] = mNum ? 0.8 : Math.max(0.08, Math.min(0.5, 0.55 - (mg - 9)*0.09));
+        const col = DSO_COLOR[type] || DSO_COLOR[0];
+        dc[k*3] = col[0]; dc[k*3+1] = col[1]; dc[k*3+2] = col[2];
+      }
+      SKY.deep = { data: deep, dirs: dd, points: makeSkyPoints(dd, ds, da, dc, GLOW_FS) };
+
+      // --- 외계행성계 (모항성 위치에 고리 표시) ---
+      const h = exo.length, ed = new Float32Array(h*3), es = new Float32Array(h), ea = new Float32Array(h), ec = new Float32Array(h*3);
+      let planetCount = 0;
+      for (let k = 0; k < h; k++){
+        const [host, ra, dec, ly, temp, starIdx, planets] = exo[k];
+        radecToScene(ra, dec, ed, k*3);
+        planetCount += planets.length;
+        es[k] = planets.length > 1 ? 8 : 6;
+        ea[k] = 0.3;
+        ec[k*3] = 0.42; ec[k*3+1] = 0.95; ec[k*3+2] = 0.78;
+      }
+      SKY.exo = { data: exo, dirs: ed, points: makeSkyPoints(ed, es, ea, ec, RING_FS), planetCount };
+
+      SKY.ready = true;
+      // 예전 임시 별 배경(무작위 점)은 실제 하늘로 대체
+      if (window.__fakeStarfield) window.__fakeStarfield.visible = false;
+      updateObjectCount();
+    } catch (err) {
+      console.warn('[우주로] 하늘 데이터를 불러오지 못해 기본 별 배경을 사용합니다.', err);
+    }
+  }
+  function loadStarInfo(){
+    if (SKY.starInfo) return Promise.resolve(SKY.starInfo);
+    if (SKY._infoPromise) return SKY._infoPromise;
+    SKY._infoPromise = fetch(SKY_DATA_BASE + 'sky-stars-info.json').then(r => r.json()).then(j => (SKY.starInfo = j));
+    return SKY._infoPromise;
+  }
+
+  // 전체 천체 수: 태양 + 행성·왜소행성 + 소행성 + 별 + 은하·성운·성단 + 외계행성
+  function totalObjects(){
+    let t = 1 + BODIES.length + ASTEROID_DATA.length;
+    if (SKY.ready) t += SKY.stars.n + SKY.deep.data.length + SKY.exo.planetCount;
+    return t;
+  }
+  // 발견일지 분모: 클릭해서 발견할 수 있는 천체 수
+  function totalDiscoverable(){
+    let t = ASTEROID_DATA.length;
+    if (SKY.ready) t += SKY.stars.n + SKY.deep.data.length + SKY.exo.data.length;
+    return t;
+  }
+  function updateObjectCount(){
+    const el = document.getElementById('obj-count');
+    if (!el) return;
+    el.textContent = LANG === 'ko'
+      ? `실제 천체 ${totalObjects().toLocaleString(LOCALE)}개`
+      : `${totalObjects().toLocaleString(LOCALE)} real objects`;
+  }
+
+  // ---------- 하늘 천체 선택(화면상 가장 가까운 밝은 천체) ----------
+  const skyMarkerGeo = new THREE.BufferGeometry();
+  skyMarkerGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+  skyMarkerGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array([34]), 1));
+  skyMarkerGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array([0.95]), 1));
+  skyMarkerGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array([1.0, 0.86, 0.45]), 3));
+  const skyMarker = new THREE.Points(skyMarkerGeo, makeSkyMaterial(RING_FS));
+  skyMarker.frustumCulled = false; skyMarker.visible = false; skyMarker.renderOrder = -9;
+  skyGroup.add(skyMarker);
+  function placeSkyMarker(dirs, idx){
+    const a = skyMarkerGeo.attributes.position.array;
+    a[0] = dirs[idx*3]*SKY_R*0.99; a[1] = dirs[idx*3+1]*SKY_R*0.99; a[2] = dirs[idx*3+2]*SKY_R*0.99;
+    skyMarkerGeo.attributes.position.needsUpdate = true;
+    skyMarker.visible = true;
+  }
+
+  function skyPick(){
+    if (!SKY.ready || !skyGroup.visible) return null;
+    const d = raycaster.ray.direction;
+    const pixAng = (camera.fov*DEG2RAD) / window.innerHeight;
+    const maxPx = 18, cosLim = Math.cos(maxPx*pixAng);
+    let best = null, bestScore = Infinity;
+    function scan(layer, dirs, n, bonusFn){
+      for (let k = 0; k < n; k++){
+        const dot = dirs[k*3]*d.x + dirs[k*3+1]*d.y + dirs[k*3+2]*d.z;
+        if (dot < cosLim) continue;
+        const px = Math.acos(Math.min(1, dot)) / pixAng;
+        const score = px - bonusFn(k);
+        if (score < bestScore){ bestScore = score; best = { layer, idx: k }; }
+      }
+    }
+    const S = SKY.stars, D = SKY.deep, X = SKY.exo;
+    scan('star', S.dirs, S.n, k => Math.max(0, 7 - S.mags[k]) * 2.2);
+    scan('deep', D.dirs, D.data.length, k => D.data[k][5] ? 14 : Math.max(0, 13 - (D.data[k][4] == null ? 14 : D.data[k][4])) * 1.2);
+    scan('exo', X.dirs, X.data.length, k => 6);
+    return best;
+  }
+
+  function showSkyPanel(kind, name, en, facts, descHtml){
+    document.getElementById('p-discover').style.display = 'inline-block';
+    document.getElementById('p-discover').textContent = LANG === 'ko' ? '✦ 지금 발견한 천체' : '✦ Just discovered';
+    document.getElementById('p-kind').textContent = kind;
+    document.getElementById('p-name').textContent = name;
+    document.getElementById('p-en').textContent = en;
+    document.getElementById('p-facts').innerHTML = facts.filter(f => f && f[1] !== '' && f[1] != null)
+      .map(f => `<div class="fact-row"><span class="k">${escHtml(f[0])}</span><span class="v">${escHtml(f[1])}</span></div>`).join('');
+    document.getElementById('p-desc').innerHTML = descHtml;
+    infoPanel.classList.add('open');
+  }
+
+  function starDisplayName(label, proper){
+    if (proper) return LANG === 'ko' ? (STAR_KO[proper] || proper) : proper;
+    const m = /^([A-Z][a-z]{1,2})(?:-?(\d))?\s+(\w+)$/.exec(label);
+    if (m && GREEK[m[1]]){
+      const ci = CON_ABBR.indexOf(m[3]);
+      const greek = GREEK[m[1]] + (m[2] ? m[2] : '');
+      if (ci >= 0) return LANG === 'ko' ? `${CON_KO[ci]} ${greek}` : `${CON_EN[ci]} ${greek}`;
+    }
+    const f = /^(\d+)\s+(\w+)$/.exec(label);
+    if (f){
+      const ci = CON_ABBR.indexOf(f[2]);
+      if (ci >= 0) return LANG === 'ko' ? `${CON_KO[ci]} ${f[1]}` : `${CON_EN[ci]} ${f[1]}`;
+    }
+    return label;
+  }
+
+  function exoPlanetLines(planets){
+    return planets.map(p => {
+      const [name, massJ, radJ, period, sma, year, method] = p;
+      const bits = [];
+      if (period != null) bits.push(LANG === 'ko' ? `공전 ${period < 2 ? period.toFixed(2) : period < 10 ? period.toFixed(1) : fmtNum(period)}일` : `orbit ${period < 2 ? period.toFixed(2) : period < 10 ? period.toFixed(1) : fmtNum(period)} days`);
+      if (radJ != null){ const re = radJ*11.209; bits.push(LANG === 'ko' ? `지구 크기의 ${re < 10 ? re.toFixed(1) : fmtNum(re)}배` : `${re < 10 ? re.toFixed(1) : fmtNum(re)}× Earth size`); }
+      else if (massJ != null){ const me = massJ*317.8; bits.push(LANG === 'ko' ? `지구 질량의 ${me < 10 ? me.toFixed(1) : fmtNum(me)}배` : `${me < 10 ? me.toFixed(1) : fmtNum(me)}× Earth mass`); }
+      const meth = EXO_METHOD[method] ? EXO_METHOD[method][LANG === 'ko' ? 0 : 1] : method;
+      if (year) bits.push(`${year}${LANG === 'ko' ? '년 발견' : ''}${meth ? ' · ' + meth : ''}`);
+      return `<div class="fact-row"><span class="k">${escHtml(name)}</span><span class="v">${escHtml(bits.join(' · '))}</span></div>`;
+    }).join('');
+  }
+
+  function showExoSystem(k){
+    const [host, ra, dec, ly, temp, starIdx, planets] = SKY.exo.data[k];
+    const years = planets.map(p => p[5]).filter(Boolean);
+    const first = years.length ? Math.min(...years) : null;
+    const facts = [
+      [LANG === 'ko' ? '확인된 행성' : 'Confirmed planets', LANG === 'ko' ? `${planets.length}개` : String(planets.length)],
+      [LANG === 'ko' ? '거리' : 'Distance', fmtDistLy(ly)],
+      [LANG === 'ko' ? '별 표면 온도' : 'Star temperature', temp ? `${fmtNum(temp - 273)}°C` : ''],
+      [LANG === 'ko' ? '첫 발견' : 'First found', first ? (LANG === 'ko' ? `${first}년` : String(first)) : '']];
+    const intro = LANG === 'ko'
+      ? `태양이 아닌 다른 별 곁을 도는 행성, 외계행성이 확인된 별이에요. 우리처럼 누군가 이 하늘을 올려다보고 있을지도 몰라요. ${lightStory(ly)}`
+      : `A star with confirmed planets of its own — worlds orbiting a sun that isn’t ours. ${lightStory(ly)}`;
+    showSkyPanel(LANG === 'ko' ? '외계행성계' : 'EXOPLANET SYSTEM', host, 'Open Exoplanet Catalogue',
+      facts, `${escHtml(intro)}<div style="margin-top:10px">${exoPlanetLines(planets)}</div>`);
+    return host;
+  }
+
+  async function showSkyObject(pick){
+    const { layer, idx } = pick;
+    let name, logName;
+    if (layer === 'star'){
+      placeSkyMarker(SKY.stars.dirs, idx);
+      document.getElementById('p-kind').textContent = LANG === 'ko' ? '항성' : 'STAR';
+      let info;
+      try { info = (await loadStarInfo())[idx]; } catch(e){ info = null; }
+      if (!info) return;
+      const [label, ly, spect, con, lum, exoIdx] = info;
+      const proper = /^[A-Z][a-z]/.test(label) && !/^(HIP|HD|HYG|Gl|GJ|Wo|NN)\b/.test(label) && !/^([A-Z][a-z]{1,2})(-?\d)?\s+\w+$/.test(label) ? label : '';
+      name = starDisplayName(label, proper);
+      const mag = SKY.stars.mags[idx];
+      const facts = [
+        [LANG === 'ko' ? '별자리' : 'Constellation', conName(con)],
+        [LANG === 'ko' ? '거리' : 'Distance', fmtDistLy(ly)],
+        [LANG === 'ko' ? '겉보기 밝기(등급)' : 'Apparent magnitude', mag.toFixed(1) + (mag <= 6.5 ? (LANG === 'ko' ? ' · 맨눈으로 보여요' : ' · naked-eye') : '')],
+        [LANG === 'ko' ? '별빛 색 · 온도' : 'Color · temperature', spectDesc(spect)],
+        [LANG === 'ko' ? '분광형' : 'Spectral type', spect || ''],
+        [LANG === 'ko' ? '밝기(태양=1)' : 'Luminosity (Sun=1)', (lum && ly) ? `${lum >= 10 ? fmtNum(lum) : lum}${LANG === 'ko' ? '배' : '×'}` : '']];
+      let desc = escHtml(lightStory(ly) || (LANG === 'ko' ? '아직 거리가 정밀하게 측정되지 않은, 아주 먼 별이에요.' : 'A distant star whose distance has not yet been precisely measured.'));
+      if (exoIdx != null && SKY.exo.data[exoIdx]){
+        const pl = SKY.exo.data[exoIdx][6];
+        facts.push([LANG === 'ko' ? '외계행성' : 'Exoplanets', LANG === 'ko' ? `${pl.length}개 확인` : `${pl.length} confirmed`]);
+        desc += `<div style="margin-top:10px">${exoPlanetLines(pl)}</div>`;
+      }
+      const en = (LANG === 'ko' && name !== label ? label + ' · ' : '') + 'HYG Database v4.1';
+      showSkyPanel(LANG === 'ko' ? '항성' : 'STAR', name, en, facts, desc);
+      logName = name;
+      showAwe(lightStory(ly), 5200);
+    } else if (layer === 'deep'){
+      placeSkyMarker(SKY.deep.dirs, idx);
+      const [id, type, ra, dec, mag, mNum, common, con, majAx, z] = SKY.deep.data[idx];
+      const nice = common ? (LANG === 'ko' ? (DSO_KO[common] || common) : common) : '';
+      name = nice || (mNum ? `M${mNum}` : id);
+      let ly = DSO_KNOWN_LY[id] || 0;
+      if (!ly && type === 0 && z && z > 0.0005) ly = z * 299792.458 / 70 * 3.26156e6;
+      const facts = [
+        [LANG === 'ko' ? '종류' : 'Type', (LANG === 'ko' ? DSO_TYPE_KO : DSO_TYPE_EN)[type]],
+        [LANG === 'ko' ? '별자리' : 'Constellation', conName(con)],
+        [LANG === 'ko' ? '메시에 번호' : 'Messier', mNum ? `M${mNum}` : ''],
+        [LANG === 'ko' ? '거리' : 'Distance', ly ? fmtDistLy(ly) : ''],
+        [LANG === 'ko' ? '겉보기 밝기(등급)' : 'Apparent magnitude', mag != null ? mag.toFixed(1) : ''],
+        [LANG === 'ko' ? '하늘에서 크기' : 'Size on the sky', majAx ? (LANG === 'ko' ? `약 ${majAx}′ (보름달의 ${(majAx/31).toFixed(majAx < 31 ? 2 : 1)}배)` : `~${majAx}′ (${(majAx/31).toFixed(majAx < 31 ? 2 : 1)}× the full Moon)`) : '']];
+      const typeDesc = (LANG === 'ko' ? DSO_TYPE_DESC_KO : DSO_TYPE_DESC_EN)[type] || '';
+      const story = ly ? lightStory(ly) : '';
+      const en = [mNum ? `M ${mNum}` : '', id, LANG === 'ko' && common ? common : '', 'OpenNGC'].filter(Boolean).join(' · ');
+      showSkyPanel(LANG === 'ko' ? (DSO_TYPE_KO[type] || '심우주 천체') : (DSO_TYPE_EN[type] || 'DEEP SKY').toUpperCase(), name, en, facts, escHtml(typeDesc + (story ? ' ' + story : '')));
+      logName = name;
+      showAwe(story || typeDesc, 5200);
+    } else {
+      placeSkyMarker(SKY.exo.dirs, idx);
+      logName = name = showExoSystem(idx);
+      const pl = SKY.exo.data[idx][6].length;
+      showAwe(LANG === 'ko' ? `${name} 곁에는 행성 ${pl}개가 돌고 있어요.` : `${pl} planet${pl > 1 ? 's' : ''} orbit ${name}.`, 4800);
+    }
+    recordDiscovery(logName, layer, false);
+    setSoundTone('asteroid_field');
+  }
+
+  // 하늘 레이어 켜기/끄기 버튼
+  const _skyBtn = document.getElementById('btn-skylayer');
+  if (_skyBtn){
+    _skyBtn.textContent = LANG === 'ko' ? '🌌 별·은하' : '🌌 Stars';
+    _skyBtn.classList.add('active');
+    _skyBtn.addEventListener('click', () => {
+      skyGroup.visible = !skyGroup.visible;
+      _skyBtn.classList.toggle('active', skyGroup.visible);
+      if (!skyGroup.visible) skyMarker.visible = false;
+    });
+  }
+  updateObjectCount();
+  loadSky();
 
   // ---------- 시간/속도 컨트롤 ----------
   let isPaused = false;
@@ -4158,7 +4614,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     try { localStorage.setItem(LOG_KEY, JSON.stringify(arr)); return true; }
     catch(e){ return false; }
   }
-  const MILESTONES = [10,25,50,100,250,500,1000,2000];
+  const MILESTONES = [10,25,50,100,250,500,1000,2000,5000,10000,25000,50000,100000];
   function showMilestone(num, label){
     const el = document.getElementById('milestone-toast');
     document.getElementById('m-num').textContent = num.toLocaleString();
@@ -4167,7 +4623,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     setTimeout(() => el.classList.remove('show'), 3400);
   }
   function checkMilestone(count){
-    if (count === ASTEROID_DATA.length){
+    if (count === totalDiscoverable()){
       showMilestone(count, t('ms_all'));
     } else if (MILESTONES.includes(count)){
       showMilestone(count, t('ms_n'));
@@ -4183,7 +4639,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
   }
   function renderLog(){
     const log = loadLog().slice().sort((a,b) => b.ts - a.ts);
-    document.getElementById('log-progress').textContent = `${log.length.toLocaleString()} / ${ASTEROID_DATA.length.toLocaleString()}${LANG === 'ko' ? '개 발견' : ' discovered'}`;
+    document.getElementById('log-progress').textContent = `${log.length.toLocaleString()} / ${totalDiscoverable().toLocaleString()}${LANG === 'ko' ? '개 발견' : ' discovered'}`;
     const box = document.getElementById('log-list');
     if (log.length === 0){
       box.innerHTML = '<div class="log-empty">' + t('log_empty') + '</div>';
@@ -4577,6 +5033,7 @@ const HERO_ASTEROID_NAMES = ["Ceres", "Vesta", "Pallas", "Juno", "Hygiea", "Eros
     camState.phi += (camState.targetPhi - camState.phi) * 0.12;
     camState.radius += (camState.targetRadius - camState.radius) * 0.08;
     updateCameraFromSpherical();
+    skyGroup.position.copy(camera.position);
 
     sunLight.position.copy(sunMesh.position);
 
